@@ -165,11 +165,16 @@ class ESCCulvertTableWidget(QWidget):
         
         if section is None:
             section = {"구분": f"단면{row+1}", "높이": "", "폭": ""}
-            self.section_data.append(section)
         
         self.set_table_item(row, 1, section["구분"])
         self.set_table_item(row, 2, str(section["높이"]))
         self.set_table_item(row, 3, str(section["폭"]))
+        
+        # Ensure section_data is in sync with the table
+        if row >= len(self.section_data):
+            self.section_data.append(section)
+        else:
+            self.section_data[row] = section
 
     def delete_selected_rows(self):
         rows_to_delete = []
@@ -180,16 +185,26 @@ class ESCCulvertTableWidget(QWidget):
         
         for row in sorted(rows_to_delete, reverse=True):
             self.table.removeRow(row)
-            del self.section_data[row]
+            if row < len(self.section_data):
+                del self.section_data[row]
+        
+        # Renumber remaining rows
+        for row in range(self.table.rowCount()):
+            self.table.item(row, 1).setText(f"단면{row+1}")
+            self.section_data[row]["구분"] = f"단면{row+1}"
         
         if self.table.rowCount() == 0:
             self.add_section_row()
+
 
     def on_item_changed(self, item):
         row = item.row()
         col = item.column()
         if 1 <= col <= 3:  # 구분, 높이, 폭 열만 처리
             key = ["구분", "높이", "폭"][col-1]
+            # Ensure the row exists in section_data
+            while row >= len(self.section_data):
+                self.section_data.append({"구분": "", "높이": "", "폭": ""})
             self.section_data[row][key] = item.text()
 
     def setup_material_properties(self):
