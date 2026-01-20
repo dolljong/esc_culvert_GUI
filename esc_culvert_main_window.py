@@ -9,7 +9,7 @@ from esc_culvert_graphics_view import create_graphics_view
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("철근량 산정 프로그램")
+        self.setWindowTitle("암거설계프로그램")
         self.setGeometry(100, 100, 1200, 800)
 
         self.create_menu_bar()

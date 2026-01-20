@@ -105,7 +105,7 @@ class ESCCulvertTableWidget(QWidget):
         items = [
             ("사업명", "테스트 사업"),
             ("발주처", "한국도로공사"),
-            ("시공사", "(주) 한길아이티"),
+            ("시공사", "(주)ESC"),
             ("현장명", "서울")
         ]
         for row, (item, content) in enumerate(items):
@@ -126,7 +126,7 @@ class ESCCulvertTableWidget(QWidget):
     def setup_basic_environment(self):
         self.table.setRowCount(3)
         items = [
-            ("설계기준", ["도로교설계기준(강도설계법)", "도로교설계기준(한계상태설계법)"]),
+            ("설계기준", ["콘크리트구조기준","도로교설계기준(강도설계법)", "도로교설계기준(한계상태설계법)"]),
             ("설계수명", "100년"),
             ("환경조건", ["건조 환경", "습윤 환경", "부식성 환경", "고부식성 환경"])
         ]
