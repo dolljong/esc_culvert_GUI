@@ -1,8 +1,13 @@
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QHeaderView, QComboBox, QDoubleSpinBox, QPushButton, QCheckBox
-from PyQt5.QtCore import Qt, QEvent
+from PyQt5.QtWidgets import (QTableWidget, QTableWidgetItem, QWidget, QVBoxLayout,
+    QHBoxLayout, QLabel, QScrollArea, QHeaderView, QComboBox, QDoubleSpinBox,
+    QPushButton, QCheckBox, QTabWidget, QFrame, QGridLayout, QSpinBox)
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QKeyEvent
 
 class ESCCulvertTableWidget(QWidget):
+    # 단면제원 데이터 변경 시그널
+    culvert_data_changed = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.concrete_strength = 30.0
@@ -77,11 +82,20 @@ class ESCCulvertTableWidget(QWidget):
 
     def update_content(self, item_text):
         self.header_label.setText(item_text)
+
+        # 기존 단면제원 위젯 제거
+        if hasattr(self, 'section_widget') and self.section_widget:
+            self.section_widget.setParent(None)
+            self.section_widget.deleteLater()
+            self.section_widget = None
+
+        # 테이블 다시 표시 및 초기화
+        self.table.show()
         self.table.clear()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["항목", "내용"])
 
-        for i in reversed(range(self.button_layout.count())): 
+        for i in reversed(range(self.button_layout.count())):
             self.button_layout.itemAt(i).widget().setParent(None)
 
         if "프로젝트 정보" in item_text:
@@ -138,23 +152,219 @@ class ESCCulvertTableWidget(QWidget):
                 self.set_table_item(row, 1, content)
 
     def setup_section_properties(self):
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["선택", "구분", "높이(m)", "폭(m)"])
-        self.table.setRowCount(0)
-        
-        if not self.section_data:
-            self.add_section_row()
-        else:
-            for section in self.section_data:
-                self.add_section_row(section)
+        # 기존 테이블 숨기기
+        self.table.hide()
 
-        add_button = QPushButton("행 추가")
-        add_button.clicked.connect(self.add_section_row)
-        delete_button = QPushButton("선택 삭제")
-        delete_button.clicked.connect(self.delete_selected_rows)
+        # 단면제원 전용 위젯 생성
+        self.section_widget = QWidget()
+        section_layout = QVBoxLayout(self.section_widget)
+        section_layout.setContentsMargins(5, 5, 5, 5)
+        section_layout.setSpacing(5)
 
-        self.button_layout.addWidget(add_button)
-        self.button_layout.addWidget(delete_button)
+        # 상단 컨트롤 영역
+        top_control = QHBoxLayout()
+
+        # 암거 콤보박스
+        culvert_combo = QComboBox()
+        culvert_combo.addItems(["암거 1 : 일반암거", "암거 2 : 일반암거", "암거 3 : 일반암거"])
+        culvert_combo.setMinimumWidth(150)
+        top_control.addWidget(culvert_combo)
+
+        # BLOCK 콤보박스
+        block_combo = QComboBox()
+        block_combo.addItems(["BLOCK 1", "BLOCK 2", "BLOCK 3"])
+        block_combo.setMinimumWidth(100)
+        top_control.addWidget(block_combo)
+
+        # 암거련수
+        top_control.addWidget(QLabel("암거련수"))
+        self.culvert_count_spin = QSpinBox()
+        self.culvert_count_spin.setRange(1, 10)
+        self.culvert_count_spin.setValue(3)
+        self.culvert_count_spin.setSuffix("련")
+        self.culvert_count_spin.valueChanged.connect(self.on_culvert_count_changed)
+        top_control.addWidget(self.culvert_count_spin)
+
+        top_control.addStretch()
+        section_layout.addLayout(top_control)
+
+        # 탭 위젯
+        self.section_tab_widget = QTabWidget()
+        self.section_tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #cccccc;
+                background: white;
+            }
+            QTabBar::tab {
+                background: #e0e0e0;
+                padding: 5px 15px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background: white;
+                border-bottom: 2px solid #4a90d9;
+            }
+        """)
+
+        # 단면제원 탭
+        self.section_tab = self.create_section_tab(self.culvert_count_spin.value())
+        self.section_tab_widget.addTab(self.section_tab, "단면제원")
+
+        # 내부힌지 탭
+        hinge_tab = QWidget()
+        self.section_tab_widget.addTab(hinge_tab, "내부힌지")
+
+        # 부상방지저판 탭
+        float_tab = QWidget()
+        self.section_tab_widget.addTab(float_tab, "부상방지저판")
+
+        section_layout.addWidget(self.section_tab_widget)
+
+        # 레이아웃에 추가
+        self.layout().addWidget(self.section_widget)
+
+    def on_culvert_count_changed(self, value):
+        """암거련수 변경 시 테이블 재생성"""
+        # 기존 단면제원 탭 제거 및 재생성
+        self.section_tab_widget.removeTab(0)
+        self.section_tab = self.create_section_tab(value)
+        self.section_tab_widget.insertTab(0, self.section_tab, "단면제원")
+        self.section_tab_widget.setCurrentIndex(0)
+        # 데이터 변경 시그널 emit
+        self.culvert_data_changed.emit()
+
+    def create_section_tab(self, culvert_count):
+        """단면제원 탭 내용 생성"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # 중간벽 개수 계산 (암거련수 - 1)
+        middle_wall_count = culvert_count - 1
+
+        # 테이블 생성
+        section_table = QTableWidget()
+        section_table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #cccccc;
+                background-color: white;
+            }
+            QTableWidget::item {
+                padding: 2px;
+            }
+        """)
+
+        # 내공제원 열: 높이(2) + 폭(암거련수)
+        inner_section_cols = 2 + culvert_count
+        # 중간벽 열: 각 중간벽마다 2열 (벽체형식, 두께)
+        middle_wall_cols = middle_wall_count * 2
+        # 기본 열: 내공제원 + 슬래브두께(2) + 좌측벽(1) + 우측벽(1)
+        total_cols = inner_section_cols + 2 + 1 + middle_wall_cols + 1
+
+        section_table.setColumnCount(total_cols)
+        section_table.setRowCount(3)  # 헤더2행 + 데이터1행
+
+        # 헤더 숨기기
+        section_table.horizontalHeader().setVisible(False)
+        section_table.verticalHeader().setVisible(False)
+
+        # 1행: 대분류 헤더
+        headers1 = [
+            ("내공제원", inner_section_cols),
+            ("슬래브두께", 2),
+            ("좌측벽", 1),
+        ]
+
+        # 중간벽 헤더 추가 (중간벽이 있을 경우)
+        if middle_wall_count > 0:
+            headers1.append(("중간벽", middle_wall_cols))
+
+        headers1.append(("우측벽", 1))
+
+        col = 0
+        for text, span in headers1:
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setBackground(QColor("#d6e6f5"))
+            item.setFont(QFont("", -1, QFont.Bold))
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            section_table.setItem(0, col, item)
+            if span > 1:
+                section_table.setSpan(0, col, 1, span)
+            col += span
+
+        # 2행: 소분류 헤더
+        headers2 = ["높이\nH", "H4"]
+
+        # 폭 헤더 추가 (암거련수만큼)
+        for i in range(culvert_count):
+            headers2.append(f"폭\nB{i+1}")
+
+        headers2.extend(["상부\nUT", "하부\nLT", "WL"])
+
+        # 중간벽 소분류 헤더 추가
+        for i in range(middle_wall_count):
+            headers2.append(f"벽체{i+1}")
+            headers2.append(f"C{i+1}")
+
+        headers2.append("WR")
+
+        for col, text in enumerate(headers2):
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setBackground(QColor("#e8f0f8"))
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            section_table.setItem(1, col, item)
+
+        # 3행: 데이터
+        data_values = ["4200", "0"]
+
+        # 폭 데이터 추가 (암거련수만큼)
+        for i in range(culvert_count):
+            data_values.append("4000")
+
+        data_values.extend(["600", "800", "600"])
+
+        # 중간벽 데이터 추가
+        for i in range(middle_wall_count):
+            data_values.append("연속벽")  # 벽체 형식
+            data_values.append("600")     # 두께
+
+        data_values.append("600")  # 우측벽
+
+        for col, value in enumerate(data_values):
+            if value == "연속벽":
+                combo = QComboBox()
+                combo.addItems(["연속벽", "기둥"])
+                section_table.setCellWidget(2, col, combo)
+            else:
+                item = QTableWidgetItem(value)
+                item.setTextAlignment(Qt.AlignCenter)
+                section_table.setItem(2, col, item)
+
+        # 열 너비 조정
+        for col in range(total_cols):
+            section_table.setColumnWidth(col, 70)
+
+        # 행 높이 조정
+        section_table.setRowHeight(0, 30)
+        section_table.setRowHeight(1, 40)
+        section_table.setRowHeight(2, 30)
+
+        # 테이블 값 변경 시 시그널 연결
+        section_table.itemChanged.connect(self.on_section_table_changed)
+
+        layout.addWidget(section_table)
+        layout.addStretch()
+
+        self.section_table = section_table
+        return tab
+
+    def on_section_table_changed(self, item):
+        """단면제원 테이블 값 변경 시"""
+        # 데이터 행(2행)의 값이 변경된 경우에만 시그널 emit
+        if item.row() == 2:
+            self.culvert_data_changed.emit()
 
     def add_section_row(self, section=None):
         row = self.table.rowCount()
@@ -240,3 +450,67 @@ class ESCCulvertTableWidget(QWidget):
 
     def get_section_properties(self):
         return self.section_data
+
+    def get_culvert_section_data(self):
+        """단면제원 테이블에서 암거 제원 데이터를 가져옴"""
+        if not hasattr(self, 'section_table') or not hasattr(self, 'culvert_count_spin'):
+            return None
+
+        culvert_count = self.culvert_count_spin.value()
+        middle_wall_count = culvert_count - 1
+
+        data = {
+            'culvert_count': culvert_count,
+            'H': 0,      # 높이
+            'H4': 0,     # H4
+            'B': [],     # 폭 리스트
+            'UT': 0,     # 상부 슬래브 두께
+            'LT': 0,     # 하부 슬래브 두께
+            'WL': 0,     # 좌측벽 두께
+            'WR': 0,     # 우측벽 두께
+            'middle_walls': []  # 중간벽 리스트 [{'type': '연속벽', 'thickness': 600}, ...]
+        }
+
+        try:
+            # 높이 H, H4
+            data['H'] = float(self.section_table.item(2, 0).text() or 0)
+            data['H4'] = float(self.section_table.item(2, 1).text() or 0)
+
+            # 폭 B1, B2, ...
+            for i in range(culvert_count):
+                col = 2 + i
+                data['B'].append(float(self.section_table.item(2, col).text() or 0))
+
+            # 슬래브 두께
+            slab_start_col = 2 + culvert_count
+            data['UT'] = float(self.section_table.item(2, slab_start_col).text() or 0)
+            data['LT'] = float(self.section_table.item(2, slab_start_col + 1).text() or 0)
+
+            # 좌측벽
+            wl_col = slab_start_col + 2
+            data['WL'] = float(self.section_table.item(2, wl_col).text() or 0)
+
+            # 중간벽
+            middle_start_col = wl_col + 1
+            for i in range(middle_wall_count):
+                wall_type_col = middle_start_col + i * 2
+                wall_thickness_col = wall_type_col + 1
+
+                combo = self.section_table.cellWidget(2, wall_type_col)
+                wall_type = combo.currentText() if combo else "연속벽"
+                wall_thickness = float(self.section_table.item(2, wall_thickness_col).text() or 0)
+
+                data['middle_walls'].append({
+                    'type': wall_type,
+                    'thickness': wall_thickness
+                })
+
+            # 우측벽
+            wr_col = middle_start_col + middle_wall_count * 2
+            data['WR'] = float(self.section_table.item(2, wr_col).text() or 0)
+
+        except (ValueError, AttributeError) as e:
+            print(f"Error getting culvert data: {e}")
+            return None
+
+        return data

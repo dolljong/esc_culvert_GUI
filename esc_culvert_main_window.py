@@ -5,6 +5,7 @@ from esc_culvert_toolbars import create_toolbars
 from esc_culvert_tree_widget import CustomTreeWidget
 from esc_culvert_table_widget import ESCCulvertTableWidget
 from esc_culvert_graphics_view import create_graphics_view
+from utils import create_sample_dxf, display_dxf, create_culvert_dxf
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -61,6 +62,7 @@ class MainWindow(QMainWindow):
 
         # 테이블 위젯 생성 및 추가
         self.table_widget = ESCCulvertTableWidget()
+        self.table_widget.culvert_data_changed.connect(self.draw_culvert_section)
         right_layout.addWidget(self.table_widget, 1)
 
         # 스플리터 비율 설정
@@ -75,7 +77,7 @@ class MainWindow(QMainWindow):
     def on_tree_item_clicked(self, item):
         menu_name = item.text(0)
         full_path = self.get_full_item_path(item)
-        
+
         # 하위 메뉴가 있는지 확인
         if item.childCount() > 0:
             # 하위 메뉴가 있다면 첫 번째 하위 메뉴 항목을 선택
@@ -84,11 +86,14 @@ class MainWindow(QMainWindow):
             full_path += " > " + menu_name
             # 첫 번째 하위 메뉴 항목을 선택된 상태로 만듦
             self.custom_tree_widget.tree_widget.setCurrentItem(first_child)
-        
+
         self.statusBar().showMessage(f'{menu_name}이(가) 선택되었습니다')
 
         # 테이블 위젯 업데이트
         self.table_widget.update_content(full_path)
+
+        # DXF 표시 업데이트
+        self.update_dxf_view(item)
 
     def get_full_item_path(self, item):
         path = []
@@ -122,3 +127,33 @@ class MainWindow(QMainWindow):
             self.custom_tree_widget.show()
             self.show_tree_action.setChecked(True)
         self.update_splitter()
+
+    def update_dxf_view(self, item):
+        """트리 아이템에 따라 DXF 뷰를 업데이트"""
+        parent_item = item.parent()
+        if parent_item:
+            parent_name = parent_item.text(0)
+            child_name = item.text(0)
+        else:
+            parent_name = item.text(0)
+            child_name = None
+
+        # 단면제원인 경우 입력된 데이터로 암거 그리기
+        if child_name == "단면제원":
+            self.draw_culvert_section()
+        else:
+            # 샘플 DXF 생성 및 표시
+            doc = create_sample_dxf(parent_name, child_name)
+            scene = self.graphics_view.scene()
+            display_dxf(doc, scene)
+            # 뷰를 씬 내용에 맞게 조정
+            self.graphics_view.fit_to_scene()
+
+    def draw_culvert_section(self):
+        """단면제원 데이터로 암거 단면 그리기"""
+        culvert_data = self.table_widget.get_culvert_section_data()
+        if culvert_data:
+            doc = create_culvert_dxf(culvert_data)
+            scene = self.graphics_view.scene()
+            display_dxf(doc, scene)
+            self.graphics_view.fit_to_scene()
