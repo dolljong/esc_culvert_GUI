@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESC Culvert - 암거 설계 프로그램</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/tree.css">
+    <link rel="stylesheet" href="css/forms.css">
+    <link rel="stylesheet" href="css/viewer.css">
+</head>
+<body>
+    <div class="main-layout">
+        <!-- 헤더 -->
+        <header class="header">
+            <div class="header-title">ESC Culvert - 암거 설계 프로그램</div>
+            <nav class="header-menu">
+                <button id="btn-new" class="menu-btn">새 프로젝트</button>
+                <button id="btn-save" class="menu-btn">저장</button>
+                <button id="btn-load" class="menu-btn">불러오기</button>
+                <button id="btn-export-dxf" class="menu-btn">DXF 내보내기</button>
+            </nav>
+        </header>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="content-area">
+            <!-- 트리 네비게이션 -->
+            <aside class="tree-panel">
+                <div class="tree-header">메뉴</div>
+                <ul id="tree-menu" class="tree-root">
+                    <!-- JavaScript에서 동적 생성 -->
+                </ul>
+            </aside>
+
+            <!-- 우측 패널 -->
+            <main class="main-panel">
+                <!-- SVG 뷰어 -->
+                <div class="viewer-panel">
+                    <div class="viewer-toolbar">
+                        <button id="btn-zoom-in" class="viewer-btn" title="확대">+</button>
+                        <button id="btn-zoom-out" class="viewer-btn" title="축소">-</button>
+                        <button id="btn-fit" class="viewer-btn" title="전체보기">⊡</button>
+                        <span id="zoom-level" class="zoom-indicator">100%</span>
+                    </div>
+                    <div id="svg-container" class="svg-container">
+                        <svg id="culvert-svg" xmlns="http://www.w3.org/2000/svg">
+                            <!-- SVG 콘텐츠 동적 생성 -->
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- 데이터 입력 폼 -->
+                <div class="form-panel">
+                    <div id="form-title" class="form-title">프로젝트 정보</div>
+                    <div id="form-content" class="form-content">
+                        <!-- JavaScript에서 동적 생성 -->
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- JavaScript (단일 파일) -->
+    <script src="js/app.bundle.js"></script>
+</body>
+</html>

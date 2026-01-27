@@ -1,0 +1,207 @@
+/* forms.css - 폼 스타일 */
+
+/* 기본 폼 그리드 */
+.form-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px 16px;
+    align-items: center;
+}
+
+.form-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+/* 입력 필드 */
+.form-input,
+.form-select {
+    width: 100%;
+    padding: 6px 10px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.form-input:disabled,
+.form-select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 숫자 입력 필드 */
+.form-input[type="number"] {
+    text-align: right;
+    -moz-appearance: textfield;
+}
+
+.form-input[type="number"]::-webkit-outer-spin-button,
+.form-input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* 단위 표시 */
+.input-with-unit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.input-unit {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* 섹션 구분선 */
+.form-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.form-section-title {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-color);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+/* 단면제원 테이블 */
+.section-table-container {
+    overflow-x: auto;
+    margin-top: 12px;
+}
+
+.section-table {
+    border-collapse: collapse;
+    font-size: 12px;
+    min-width: 100%;
+}
+
+.section-table th,
+.section-table td {
+    border: 1px solid var(--border-color);
+    padding: 6px 8px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.section-table th {
+    background-color: var(--bg-tertiary);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+/* 헤더 카테고리별 색상 */
+.section-table th.cat-inner {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.section-table th.cat-slab {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.section-table th.cat-wall-left {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.section-table th.cat-wall-middle {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.section-table th.cat-wall-right {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.section-table td {
+    background-color: var(--bg-secondary);
+}
+
+/* 테이블 내 입력 필드 */
+.section-table input {
+    width: 60px;
+    padding: 4px 6px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: right;
+}
+
+.section-table input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.section-table select {
+    width: 70px;
+    padding: 4px 4px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-size: 11px;
+}
+
+/* 암거 련수 컨트롤 */
+.culvert-count-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.culvert-count-control label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.culvert-count-control input {
+    width: 80px;
+}
+
+/* 폼 그룹 */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 플레이스홀더 메시지 */
+.placeholder-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+    font-size: 14px;
+}

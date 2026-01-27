@@ -1,0 +1,155 @@
+/* main.css - 전체 레이아웃 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --bg-tertiary: #e8e8e8;
+    --border-color: #d0d0d0;
+    --text-primary: #333333;
+    --text-secondary: #666666;
+    --accent-color: #0066cc;
+    --accent-hover: #0052a3;
+    --header-height: 48px;
+    --tree-width: 240px;
+    --form-height: 35%;
+}
+
+html, body {
+    height: 100%;
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    font-size: 13px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.main-layout {
+    display: grid;
+    grid-template-rows: var(--header-height) 1fr;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 헤더 */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.header-menu {
+    display: flex;
+    gap: 8px;
+}
+
+.menu-btn {
+    padding: 6px 12px;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.menu-btn:hover {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* 콘텐츠 영역 */
+.content-area {
+    display: grid;
+    grid-template-columns: var(--tree-width) 1fr;
+    overflow: hidden;
+}
+
+/* 트리 패널 */
+.tree-panel {
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.tree-header {
+    padding: 12px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 메인 패널 */
+.main-panel {
+    display: grid;
+    grid-template-rows: 1fr var(--form-height);
+    overflow: hidden;
+}
+
+/* 뷰어 패널 */
+.viewer-panel {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+/* 폼 패널 */
+.form-panel {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.form-title {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.form-content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}

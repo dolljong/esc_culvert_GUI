@@ -1,0 +1,32 @@
+{
+  "currentMenu": "프로젝트 정보",
+  "projectInfo": {
+    "businessName": "",
+    "client": "",
+    "constructor": "",
+    "siteName": ""
+  },
+  "designConditions": {
+    "standard": "콘크리트구조기준",
+    "designLife": "100년",
+    "environment": "건조 환경"
+  },
+  "materials": {
+    "fck": 30.0,
+    "fy": 400.0
+  },
+  "sectionData": {
+    "culvert_count": 3,
+    "H": 4200,
+    "H4": 0,
+    "B": [4000, 4000, 4000],
+    "UT": 600,
+    "LT": 800,
+    "WL": 600,
+    "WR": 600,
+    "middle_walls": [
+      { "type": "연속벽", "thickness": 600 },
+      { "type": "연속벽", "thickness": 600 }
+    ]
+  }
+}

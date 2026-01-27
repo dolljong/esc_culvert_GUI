@@ -1,0 +1,82 @@
+/* tree.css - 트리 위젯 스타일 */
+
+.tree-root {
+    list-style: none;
+    padding: 8px 0;
+}
+
+.tree-item {
+    user-select: none;
+}
+
+.tree-item-content {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.tree-item-content:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.tree-item-content.selected {
+    background-color: var(--accent-color);
+}
+
+.tree-item-content.selected:hover {
+    background-color: var(--accent-hover);
+}
+
+/* 확장/축소 아이콘 */
+.tree-toggle {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-toggle.hidden {
+    visibility: hidden;
+}
+
+/* 아이템 라벨 */
+.tree-label {
+    flex: 1;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 자식 목록 */
+.tree-children {
+    list-style: none;
+    padding-left: 20px;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease-out;
+}
+
+.tree-children.expanded {
+    max-height: 500px;
+}
+
+/* 들여쓰기 레벨별 스타일 */
+.tree-item[data-level="1"] > .tree-item-content {
+    padding-left: 16px;
+}
+
+.tree-item[data-level="2"] > .tree-item-content {
+    padding-left: 36px;
+}
