@@ -889,8 +889,97 @@
     }
 
     // ========================================
-    // DXF EXPORT - DXF 내보내기
+    // DXF EXPORT - DXF 내보내기 (R12 형식)
     // ========================================
+
+    // DXF 생성 클래스 (R12 호환)
+    class DxfWriter {
+        constructor() {
+            this.entities = [];
+            this.layers = [];
+            this.currentLayer = '0';
+        }
+
+        addLayer(name, color) {
+            this.layers.push({ name, color });
+        }
+
+        setLayer(name) {
+            this.currentLayer = name;
+        }
+
+        drawLine(x1, y1, x2, y2) {
+            this.entities.push({ type: 'LINE', layer: this.currentLayer, x1, y1, x2, y2 });
+        }
+
+        drawPolyline(points, closed = false) {
+            this.entities.push({ type: 'POLYLINE', layer: this.currentLayer, points, closed });
+        }
+
+        drawText(x, y, height, rotation, text) {
+            this.entities.push({ type: 'TEXT', layer: this.currentLayer, x, y, height, rotation, text });
+        }
+
+        toDxfString() {
+            let s = '';
+
+            // HEADER
+            s += '0\nSECTION\n2\nHEADER\n';
+            s += '9\n$ACADVER\n1\nAC1009\n';
+            s += '9\n$INSUNITS\n70\n4\n';
+            s += '0\nENDSEC\n';
+
+            // TABLES
+            s += '0\nSECTION\n2\nTABLES\n';
+
+            // LTYPE
+            s += '0\nTABLE\n2\nLTYPE\n70\n1\n';
+            s += '0\nLTYPE\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0.0\n';
+            s += '0\nENDTAB\n';
+
+            // LAYER
+            s += '0\nTABLE\n2\nLAYER\n70\n' + (this.layers.length + 1) + '\n';
+            s += '0\nLAYER\n2\n0\n70\n0\n62\n7\n6\nCONTINUOUS\n';
+            for (const lyr of this.layers) {
+                s += '0\nLAYER\n2\n' + lyr.name + '\n70\n0\n62\n' + lyr.color + '\n6\nCONTINUOUS\n';
+            }
+            s += '0\nENDTAB\n';
+
+            // STYLE
+            s += '0\nTABLE\n2\nSTYLE\n70\n1\n';
+            s += '0\nSTYLE\n2\nSTANDARD\n70\n0\n40\n0.0\n41\n1.0\n50\n0.0\n71\n0\n42\n250.0\n3\ntxt\n4\n\n';
+            s += '0\nENDTAB\n';
+
+            s += '0\nENDSEC\n';
+
+            // ENTITIES
+            s += '0\nSECTION\n2\nENTITIES\n';
+
+            for (const e of this.entities) {
+                if (e.type === 'LINE') {
+                    s += '0\nLINE\n8\n' + e.layer + '\n';
+                    s += '10\n' + e.x1 + '\n20\n' + e.y1 + '\n30\n0\n';
+                    s += '11\n' + e.x2 + '\n21\n' + e.y2 + '\n31\n0\n';
+                } else if (e.type === 'POLYLINE') {
+                    s += '0\nPOLYLINE\n8\n' + e.layer + '\n66\n1\n70\n' + (e.closed ? 1 : 0) + '\n';
+                    for (const pt of e.points) {
+                        s += '0\nVERTEX\n8\n' + e.layer + '\n10\n' + pt[0] + '\n20\n' + pt[1] + '\n30\n0\n';
+                    }
+                    s += '0\nSEQEND\n8\n' + e.layer + '\n';
+                } else if (e.type === 'TEXT') {
+                    s += '0\nTEXT\n8\n' + e.layer + '\n';
+                    s += '10\n' + e.x + '\n20\n' + e.y + '\n30\n0\n';
+                    s += '40\n' + e.height + '\n1\n' + e.text + '\n';
+                    if (e.rotation !== 0) s += '50\n' + e.rotation + '\n';
+                    s += '72\n1\n11\n' + e.x + '\n21\n' + e.y + '\n31\n0\n73\n2\n';
+                }
+            }
+
+            s += '0\nENDSEC\n0\nEOF\n';
+            return s;
+        }
+    }
+
     function exportDXF() {
         const data = state.getSectionData();
         if (!data || !data.H || data.H <= 0 || !data.B || data.B.length === 0) {
@@ -899,28 +988,95 @@
         }
 
         const dims = calculateDims(data);
-        let dxf = '0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n';
-        dxf += '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n3\n';
-        dxf += '0\nLAYER\n2\nOUTER\n70\n0\n62\n7\n6\nCONTINUOUS\n';
-        dxf += '0\nLAYER\n2\nINNER\n70\n0\n62\n3\n6\nCONTINUOUS\n';
-        dxf += '0\nLAYER\n2\nDIMENSION\n70\n0\n62\n1\n6\nCONTINUOUS\n';
-        dxf += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+        const dxf = new DxfWriter();
 
-        // 외곽선
-        dxf += createDxfPolyline([[0, 0], [dims.totalWidth, 0], [dims.totalWidth, dims.totalHeight], [0, dims.totalHeight], [0, 0]], 'OUTER');
+        // 레이어 설정 (색상: 7=흰색, 3=청록, 1=빨강)
+        dxf.addLayer('OUTER', 7);
+        dxf.addLayer('INNER', 3);
+        dxf.addLayer('DIMENSION', 1);
 
-        // 내부
-        let xOff = data.WL;
+        // 외곽선 그리기
+        dxf.setLayer('OUTER');
+        dxf.drawPolyline([
+            [0, 0],
+            [dims.totalWidth, 0],
+            [dims.totalWidth, dims.totalHeight],
+            [0, dims.totalHeight],
+            [0, 0]
+        ], true);
+
+        // 내부 공간 그리기
+        dxf.setLayer('INNER');
+        let xOffset = data.WL;
         for (let i = 0; i < data.culvert_count; i++) {
             const B = data.B[i];
-            dxf += createDxfPolyline([[xOff, dims.LT], [xOff + B, dims.LT], [xOff + B, dims.LT + dims.H], [xOff, dims.LT + dims.H], [xOff, dims.LT]], 'INNER');
-            xOff += B;
-            if (i < data.middle_walls.length) xOff += data.middle_walls[i].thickness;
+            dxf.drawPolyline([
+                [xOffset, dims.LT],
+                [xOffset + B, dims.LT],
+                [xOffset + B, dims.LT + dims.H],
+                [xOffset, dims.LT + dims.H],
+                [xOffset, dims.LT]
+            ], true);
+            xOffset += B;
+            if (i < data.middle_walls.length) {
+                xOffset += data.middle_walls[i].thickness;
+            }
         }
 
-        dxf += '0\nENDSEC\n0\nEOF\n';
+        // 치수선 그리기
+        dxf.setLayer('DIMENSION');
+        const dimOffset = 500;
+        const dimOffsetFar = 750;
+        const textHeight = 250;
 
-        const blob = new Blob([dxf], { type: 'application/dxf' });
+        // 전체 폭 (하단)
+        drawDimH(dxf, 0, dims.totalWidth, 0, -dimOffset, dims.totalWidth.toString(), textHeight);
+
+        // 전체 높이 (우측)
+        drawDimV(dxf, dims.totalWidth, 0, dims.totalHeight, dimOffset, dims.totalHeight.toString(), textHeight);
+
+        // 내공 높이 H (좌측)
+        drawDimV(dxf, 0, dims.LT, dims.LT + dims.H, -dimOffset, dims.H.toString(), textHeight);
+
+        // 각 내공 폭 (상단)
+        xOffset = data.WL;
+        for (let i = 0; i < data.culvert_count; i++) {
+            const B = data.B[i];
+            drawDimH(dxf, xOffset, xOffset + B, dims.totalHeight, dimOffset, B.toString(), textHeight);
+            xOffset += B;
+            if (i < data.middle_walls.length) {
+                xOffset += data.middle_walls[i].thickness;
+            }
+        }
+
+        // 상부 슬래브 UT
+        drawDimV(dxf, 0, dims.LT + dims.H, dims.totalHeight, -dimOffsetFar, dims.UT.toString(), textHeight);
+
+        // 하부 슬래브 LT
+        drawDimV(dxf, 0, 0, dims.LT, -dimOffsetFar, dims.LT.toString(), textHeight);
+
+        // 좌측 벽 WL
+        drawDimH(dxf, 0, dims.WL, 0, -dimOffsetFar, dims.WL.toString(), textHeight);
+
+        // 우측 벽 WR
+        drawDimH(dxf, dims.totalWidth - dims.WR, dims.totalWidth, 0, -dimOffsetFar, dims.WR.toString(), textHeight);
+
+        // 중간벽 치수
+        if (data.middle_walls && data.middle_walls.length > 0) {
+            xOffset = data.WL;
+            for (let i = 0; i < data.culvert_count; i++) {
+                xOffset += data.B[i];
+                if (i < data.middle_walls.length) {
+                    const wt = data.middle_walls[i].thickness;
+                    drawDimH(dxf, xOffset, xOffset + wt, dims.totalHeight, dimOffsetFar, wt.toString(), textHeight);
+                    xOffset += wt;
+                }
+            }
+        }
+
+        // DXF 파일 다운로드
+        const dxfString = dxf.toDxfString();
+        const blob = new Blob([dxfString], { type: 'application/dxf' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -942,10 +1098,26 @@
         };
     }
 
-    function createDxfPolyline(points, layer) {
-        let dxf = '0\nLWPOLYLINE\n8\n' + layer + '\n90\n' + points.length + '\n70\n0\n';
-        points.forEach(([x, y]) => { dxf += '10\n' + x + '\n20\n' + y + '\n'; });
-        return dxf;
+    // 수평 치수선 그리기
+    function drawDimH(dxf, x1, x2, y, offset, text, textHeight) {
+        const dimY = y + offset;
+        dxf.drawLine(x1, y, x1, dimY);
+        dxf.drawLine(x2, y, x2, dimY);
+        dxf.drawLine(x1, dimY, x2, dimY);
+        const textX = (x1 + x2) / 2;
+        const textY = dimY + (offset > 0 ? textHeight * 0.5 : -textHeight * 0.8);
+        dxf.drawText(textX, textY, textHeight, 0, text);
+    }
+
+    // 수직 치수선 그리기
+    function drawDimV(dxf, x, y1, y2, offset, text, textHeight) {
+        const dimX = x + offset;
+        dxf.drawLine(x, y1, dimX, y1);
+        dxf.drawLine(x, y2, dimX, y2);
+        dxf.drawLine(dimX, y1, dimX, y2);
+        const textX = dimX + (offset > 0 ? textHeight * 0.5 : -textHeight * 0.8);
+        const textY = (y1 + y2) / 2;
+        dxf.drawText(textX, textY, textHeight, 90, text);
     }
 
     // ========================================
