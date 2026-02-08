@@ -111,6 +111,36 @@
     vector-effect: non-scaling-stroke;
 }
 
+/* 지반선 */
+#culvert-svg .ground-line {
+    fill: none;
+    stroke: #666666;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .ground-hatch {
+    fill: none;
+    stroke: #666666;
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+/* 지하수위 */
+#culvert-svg .water-level-line {
+    fill: none;
+    stroke: #0077cc;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .water-level-symbol {
+    fill: none;
+    stroke: #0077cc;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
 /* 빈 상태 메시지 */
 .viewer-empty {
     position: absolute;

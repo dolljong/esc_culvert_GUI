@@ -7,6 +7,7 @@ import { initZoomPan, getZoomPan } from './viewer/zoomPan.js';
 import { renderProjectInfoForm } from './forms/projectInfo.js';
 import { renderBasicEnvironmentForm } from './forms/basicEnvironment.js';
 import { renderMaterialsForm } from './forms/materials.js';
+import { renderGroundInfoForm } from './forms/groundInfo.js';
 import { renderSectionPropertiesForm } from './forms/sectionProperties.js';
 import storage from './utils/storage.js';
 import { exportDXF } from './utils/dxfExport.js';
@@ -68,6 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
     state.on('stateChange', () => {
         // 자동 저장
         autoSave();
+        // SVG 업데이트 (지반정보 변경 반영)
+        const renderer = getRenderer();
+        if (renderer) {
+            renderer.render(state.getSectionData());
+        }
     });
 
     console.log('초기화 완료');
@@ -149,6 +155,9 @@ function updateFormContent(menu) {
             break;
         case '재료특성':
             renderMaterialsForm(container);
+            break;
+        case '지반정보':
+            renderGroundInfoForm(container);
             break;
         case '단면제원':
             renderSectionPropertiesForm(container);

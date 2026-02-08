@@ -18,6 +18,12 @@ const defaultState = {
         fck: 30.0,
         fy: 400.0
     },
+    groundInfo: {
+        earthCoverDepth: 2000,
+        groundwaterLevel: 3000,
+        frictionAngle: 30,
+        soilUnitWeight: 18
+    },
     sectionData: {
         culvert_count: 3,
         H: 4200,
@@ -109,6 +115,16 @@ export const state = {
 
     getMaterials() {
         return appState.materials;
+    },
+
+    // 지반정보 업데이트
+    updateGroundInfo(key, value) {
+        appState.groundInfo[key] = value;
+        this.emit('stateChange', appState);
+    },
+
+    getGroundInfo() {
+        return appState.groundInfo;
     },
 
     // 단면 데이터 업데이트

@@ -62,6 +62,12 @@ export class SvgRenderer {
         // 부상방지저판 그리기
         this.drawAntiFloatSlab(mainGroup, culvertData, dims);
 
+        // 지반선 그리기
+        this.drawGroundLevel(mainGroup, culvertData, dims);
+
+        // 지하수위 표시
+        this.drawGroundwaterLevel(mainGroup, culvertData, dims);
+
         // 치수선 그리기
         this.drawDimensions(mainGroup, culvertData, dims);
 
@@ -124,12 +130,15 @@ export class SvgRenderer {
         const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
         const extL = af ? (af.leftExtension || 0) : 0;
         const extR = af ? (af.rightExtension || 0) : 0;
+        const groundInfo = state.getGroundInfo();
+        const earthCover = groundInfo.earthCoverDepth || 0;
+        const topY = dims.totalHeight + earthCover;
         const minX = -extL - PADDING;
         const width = dims.totalWidth + extL + extR + PADDING * 2;
-        const height = dims.totalHeight + PADDING * 2;
+        const height = topY + PADDING * 2;
 
         // Y축 반전을 위해 transform 사용
-        this.svg.setAttribute('viewBox', `${minX} ${-dims.totalHeight - PADDING} ${width} ${height}`);
+        this.svg.setAttribute('viewBox', `${minX} ${-topY - PADDING} ${width} ${height}`);
         this.viewBox = { x: minX, y: -PADDING, width, height };
 
         // 전체 그룹에 Y축 반전 적용
@@ -276,6 +285,79 @@ export class SvgRenderer {
         return polyline;
     }
 
+    // 지반선 그리기
+    drawGroundLevel(parent, data, dims) {
+        const groundInfo = state.getGroundInfo();
+        const earthCover = groundInfo.earthCoverDepth || 0;
+        if (earthCover <= 0) return;
+
+        const groundY = dims.totalHeight + earthCover;
+
+        const afData = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+        const leftX = afData ? -(afData.leftExtension || 0) : 0;
+        const rightX = afData ? dims.totalWidth + (afData.rightExtension || 0) : dims.totalWidth;
+
+        const lineLeft = leftX - 500;
+        const lineRight = rightX + 500;
+
+        const groundGroup = this.createGroup('ground-level');
+
+        // 지반선
+        groundGroup.appendChild(this.createLine(lineLeft, groundY, lineRight, groundY, 'ground-line'));
+
+        // 해치 마크 (지반선 아래쪽)
+        const hatchSpacing = 400;
+        const hatchSize = 200;
+        for (let x = lineLeft + hatchSpacing / 2; x <= lineRight; x += hatchSpacing) {
+            groundGroup.appendChild(this.createLine(x, groundY, x - hatchSize, groundY - hatchSize, 'ground-hatch'));
+        }
+
+        parent.appendChild(groundGroup);
+    }
+
+    // 지하수위 표시
+    drawGroundwaterLevel(parent, data, dims) {
+        const groundInfo = state.getGroundInfo();
+        const waterLevel = groundInfo.groundwaterLevel || 0;
+        if (waterLevel <= 0) return;
+
+        const earthCover = groundInfo.earthCoverDepth || 0;
+        const groundY = dims.totalHeight + earthCover;
+        const waterY = groundY - waterLevel;
+        const waterGroup = this.createGroup('water-level');
+
+        const triBase = 300;
+        const triH = 260;
+
+        // 우측 벽체 바깥쪽
+        const rLineStart = dims.totalWidth;
+        const rLineEnd = dims.totalWidth + 700;
+        waterGroup.appendChild(this.createLine(rLineStart, waterY, rLineEnd, waterY, 'water-level-line'));
+
+        const rTriCx = dims.totalWidth + 350;
+        const rTri = document.createElementNS(SVG_NS, 'polygon');
+        rTri.setAttribute('points',
+            `${rTriCx - triBase / 2},${waterY + triH} ${rTriCx + triBase / 2},${waterY + triH} ${rTriCx},${waterY}`
+        );
+        rTri.setAttribute('class', 'water-level-symbol');
+        waterGroup.appendChild(rTri);
+
+        // 좌측 벽체 바깥쪽
+        const lLineStart = 0;
+        const lLineEnd = -700;
+        waterGroup.appendChild(this.createLine(lLineStart, waterY, lLineEnd, waterY, 'water-level-line'));
+
+        const lTriCx = -350;
+        const lTri = document.createElementNS(SVG_NS, 'polygon');
+        lTri.setAttribute('points',
+            `${lTriCx - triBase / 2},${waterY + triH} ${lTriCx + triBase / 2},${waterY + triH} ${lTriCx},${waterY}`
+        );
+        lTri.setAttribute('class', 'water-level-symbol');
+        waterGroup.appendChild(lTri);
+
+        parent.appendChild(waterGroup);
+    }
+
     // 치수선 그리기
     drawDimensions(parent, data, dims) {
         const dimGroup = this.createGroup('dimensions');
@@ -291,10 +373,11 @@ export class SvgRenderer {
             -DIM_OFFSET, dims.totalWidth.toString()
         );
 
-        // 2. 전체 높이 (우측)
+        // 2. 전체 높이 (우측, 외측 tier)
         this.drawVerticalDimension(
             dimGroup, rightX, 0, dims.totalHeight,
-            DIM_OFFSET, dims.totalHeight.toString()
+            DIM_OFFSET_FAR, dims.totalHeight.toString(),
+            EXT_LINE_GAP + 500
         );
 
         // 3. 내공 높이 H (좌측)
@@ -371,6 +454,28 @@ export class SvgRenderer {
             }
         }
 
+        // 토피 치수 (우측, 전체 높이 치수선과 동일 x 위치)
+        const groundInfo = state.getGroundInfo();
+        const earthCover = groundInfo.earthCoverDepth || 0;
+        if (earthCover > 0) {
+            const groundY = dims.totalHeight + earthCover;
+            this.drawVerticalDimension(
+                dimGroup, rightX, dims.totalHeight, groundY,
+                DIM_OFFSET_FAR, earthCover.toString(),
+                EXT_LINE_GAP + 500
+            );
+
+            // 지하수위 깊이 치수 (지표면부터, 구조물쪽 가까운 tier)
+            const waterLevel = groundInfo.groundwaterLevel || 0;
+            if (waterLevel > 0) {
+                const waterY = groundY - waterLevel;
+                this.drawVerticalDimension(
+                    dimGroup, rightX, waterY, groundY,
+                    DIM_OFFSET, waterLevel.toString()
+                );
+            }
+        }
+
         parent.appendChild(dimGroup);
     }
 
@@ -396,16 +501,16 @@ export class SvgRenderer {
 
         // 텍스트
         const textX = (x1 + x2) / 2;
-        const textY = dimY + 150;
+        const textY = dimY + 25;
         const textEl = this.createText(textX, textY, text, offset < 0);
         parent.appendChild(textEl);
     }
 
     // 수직 치수선
-    drawVerticalDimension(parent, x, y1, y2, offset, text) {
+    drawVerticalDimension(parent, x, y1, y2, offset, text, extGap) {
         const dimX = x + offset;
         const sign = offset > 0 ? 1 : -1;
-        const extStart = x + sign * EXT_LINE_GAP;
+        const extStart = x + sign * (extGap !== undefined ? extGap : EXT_LINE_GAP);
 
         // 보조선 (연장선)
         const ext1 = this.createLine(extStart, y1, dimX, y1, 'extension-line');
@@ -422,7 +527,7 @@ export class SvgRenderer {
         this.drawArrow(parent, dimX, y2, 'down');
 
         // 텍스트 (회전)
-        const textX = dimX - 150;
+        const textX = dimX - 25;
         const textY = (y1 + y2) / 2;
         const textEl = this.createText(textX, textY, text, false, true);
         parent.appendChild(textEl);

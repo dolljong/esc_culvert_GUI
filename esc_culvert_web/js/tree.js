@@ -13,6 +13,7 @@ const treeData = [
         children: [
             { label: '기본환경' },
             { label: '재료특성' },
+            { label: '지반정보' },
             { label: '기타환경' }
         ]
     },

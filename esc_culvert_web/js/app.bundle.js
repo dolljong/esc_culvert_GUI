@@ -24,6 +24,12 @@
             fck: 30.0,
             fy: 400.0
         },
+        groundInfo: {
+            earthCoverDepth: 2000,
+            groundwaterLevel: 3000,
+            frictionAngle: 30,
+            soilUnitWeight: 18
+        },
         sectionData: {
             culvert_count: 3,
             H: 4200,
@@ -87,6 +93,11 @@
             this.emit('stateChange', appState);
         },
         getMaterials() { return appState.materials; },
+        updateGroundInfo(key, value) {
+            appState.groundInfo[key] = value;
+            this.emit('stateChange', appState);
+        },
+        getGroundInfo() { return appState.groundInfo; },
         updateSectionData(key, value) {
             appState.sectionData[key] = value;
             this.emit('sectionDataChange', appState.sectionData);
@@ -223,6 +234,7 @@
         { label: '설계조건', children: [
             { label: '기본환경' },
             { label: '재료특성' },
+            { label: '지반정보' },
             { label: '기타환경' }
         ]},
         { label: '단면입력', children: [
@@ -360,6 +372,8 @@
             this.drawAntiFloatSlab(mainGroup, culvertData, dims);
             this.drawInnerCompartments(mainGroup, culvertData, dims);
             this.drawHaunches(mainGroup, culvertData, dims);
+            this.drawGroundLevel(mainGroup, culvertData, dims);
+            this.drawGroundwaterLevel(mainGroup, culvertData, dims);
             this.drawDimensions(mainGroup, culvertData, dims);
 
             this.svg.appendChild(mainGroup);
@@ -404,10 +418,13 @@
             const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
             const extL = af ? (af.leftExtension || 0) : 0;
             const extR = af ? (af.rightExtension || 0) : 0;
+            const groundInfo = state.getGroundInfo();
+            const earthCover = groundInfo.earthCoverDepth || 0;
+            const topY = dims.totalHeight + earthCover;
             const minX = -extL - PADDING;
             const width = dims.totalWidth + extL + extR + PADDING * 2;
-            const height = dims.totalHeight + PADDING * 2;
-            this.svg.setAttribute('viewBox', `${minX} ${-dims.totalHeight - PADDING} ${width} ${height}`);
+            const height = topY + PADDING * 2;
+            this.svg.setAttribute('viewBox', `${minX} ${-topY - PADDING} ${width} ${height}`);
             const mainGroup = this.svg.querySelector('.main-group');
             if (mainGroup) mainGroup.setAttribute('transform', 'scale(1, -1)');
         }
@@ -516,6 +533,71 @@
             return polyline;
         }
 
+        drawGroundLevel(parent, data, dims) {
+            const groundInfo = state.getGroundInfo();
+            const earthCover = groundInfo.earthCoverDepth || 0;
+            if (earthCover <= 0) return;
+
+            const groundY = dims.totalHeight + earthCover;
+            const afData = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+            const leftX = afData ? -(afData.leftExtension || 0) : 0;
+            const rightX = afData ? dims.totalWidth + (afData.rightExtension || 0) : dims.totalWidth;
+            const lineLeft = leftX - 500;
+            const lineRight = rightX + 500;
+
+            const groundGroup = this.createGroup('ground-level');
+            groundGroup.appendChild(this.createLine(lineLeft, groundY, lineRight, groundY, 'ground-line'));
+
+            const hatchSpacing = 400;
+            const hatchSize = 200;
+            for (let x = lineLeft + hatchSpacing / 2; x <= lineRight; x += hatchSpacing) {
+                groundGroup.appendChild(this.createLine(x, groundY, x - hatchSize, groundY - hatchSize, 'ground-hatch'));
+            }
+            parent.appendChild(groundGroup);
+        }
+
+        drawGroundwaterLevel(parent, data, dims) {
+            const groundInfo = state.getGroundInfo();
+            const waterLevel = groundInfo.groundwaterLevel || 0;
+            if (waterLevel <= 0) return;
+
+            const earthCover = groundInfo.earthCoverDepth || 0;
+            const groundY = dims.totalHeight + earthCover;
+            const waterY = groundY - waterLevel;
+            const waterGroup = this.createGroup('water-level');
+
+            const triBase = 300;
+            const triH = 260;
+
+            // 우측 벽체 바깥쪽
+            const rLineStart = dims.totalWidth;
+            const rLineEnd = dims.totalWidth + 700;
+            waterGroup.appendChild(this.createLine(rLineStart, waterY, rLineEnd, waterY, 'water-level-line'));
+
+            const rTriCx = dims.totalWidth + 350;
+            const rTri = document.createElementNS(SVG_NS, 'polygon');
+            rTri.setAttribute('points',
+                `${rTriCx - triBase / 2},${waterY + triH} ${rTriCx + triBase / 2},${waterY + triH} ${rTriCx},${waterY}`
+            );
+            rTri.setAttribute('class', 'water-level-symbol');
+            waterGroup.appendChild(rTri);
+
+            // 좌측 벽체 바깥쪽
+            const lLineStart = 0;
+            const lLineEnd = -700;
+            waterGroup.appendChild(this.createLine(lLineStart, waterY, lLineEnd, waterY, 'water-level-line'));
+
+            const lTriCx = -350;
+            const lTri = document.createElementNS(SVG_NS, 'polygon');
+            lTri.setAttribute('points',
+                `${lTriCx - triBase / 2},${waterY + triH} ${lTriCx + triBase / 2},${waterY + triH} ${lTriCx},${waterY}`
+            );
+            lTri.setAttribute('class', 'water-level-symbol');
+            waterGroup.appendChild(lTri);
+
+            parent.appendChild(waterGroup);
+        }
+
         drawDimensions(parent, data, dims) {
             const dimGroup = this.createGroup('dimensions');
 
@@ -526,7 +608,7 @@
 
             // 전체 폭/높이
             this.drawHorizontalDimension(dimGroup, 0, dims.totalWidth, 0, -DIM_OFFSET, dims.totalWidth.toString());
-            this.drawVerticalDimension(dimGroup, rightX, 0, dims.totalHeight, DIM_OFFSET, dims.totalHeight.toString());
+            this.drawVerticalDimension(dimGroup, rightX, 0, dims.totalHeight, DIM_OFFSET_FAR, dims.totalHeight.toString(), EXT_LINE_GAP + 500);
             this.drawVerticalDimension(dimGroup, leftX, dims.LT, dims.LT + dims.H, -DIM_OFFSET, dims.H.toString());
 
             // 각 내공 폭
@@ -561,12 +643,32 @@
                 const lExt = afData.leftExtension || 0;
                 const t = afData.thickness || 0;
                 if (lExt > 0) {
-                    // 좌측 돌출폭 (수평, 바닥 y=0 기준)
                     this.drawHorizontalDimension(dimGroup, -lExt, 0, 0, -DIM_OFFSET, lExt.toString());
                 }
                 if (t > 0) {
-                    // 두께 (수직, 좌측 돌출부 왼쪽 면)
                     this.drawVerticalDimension(dimGroup, -lExt, 0, t, -DIM_OFFSET, t.toString());
+                }
+            }
+
+            // 토피 치수 (우측, 전체 높이 치수선과 동일 x 위치)
+            const groundInfo = state.getGroundInfo();
+            const earthCover = groundInfo.earthCoverDepth || 0;
+            if (earthCover > 0) {
+                const groundY = dims.totalHeight + earthCover;
+                this.drawVerticalDimension(
+                    dimGroup, rightX, dims.totalHeight, groundY,
+                    DIM_OFFSET_FAR, earthCover.toString(),
+                    EXT_LINE_GAP + 500
+                );
+
+                // 지하수위 깊이 치수 (지표면부터, 구조물쪽 가까운 tier)
+                const waterLevel = groundInfo.groundwaterLevel || 0;
+                if (waterLevel > 0) {
+                    const waterY = groundY - waterLevel;
+                    this.drawVerticalDimension(
+                        dimGroup, rightX, waterY, groundY,
+                        DIM_OFFSET, waterLevel.toString()
+                    );
                 }
             }
 
@@ -582,19 +684,19 @@
             parent.appendChild(this.createLine(x1, dimY, x2, dimY, 'dimension-line'));
             this.drawArrow(parent, x1, dimY, 'right');
             this.drawArrow(parent, x2, dimY, 'left');
-            parent.appendChild(this.createText((x1 + x2) / 2, dimY + 300, text, offset < 0));
+            parent.appendChild(this.createText((x1 + x2) / 2, dimY + 175, text, offset < 0));
         }
 
-        drawVerticalDimension(parent, x, y1, y2, offset, text) {
+        drawVerticalDimension(parent, x, y1, y2, offset, text, extGap) {
             const dimX = x + offset;
             const sign = offset > 0 ? 1 : -1;
-            const extStart = x + sign * EXT_LINE_GAP;
+            const extStart = x + sign * (extGap !== undefined ? extGap : EXT_LINE_GAP);
             parent.appendChild(this.createLine(extStart, y1, dimX, y1, 'extension-line'));
             parent.appendChild(this.createLine(extStart, y2, dimX, y2, 'extension-line'));
             parent.appendChild(this.createLine(dimX, y1, dimX, y2, 'dimension-line'));
             this.drawArrow(parent, dimX, y1, 'up');
             this.drawArrow(parent, dimX, y2, 'down');
-            parent.appendChild(this.createText(dimX - 300, (y1 + y2) / 2, text, false, true));
+            parent.appendChild(this.createText(dimX - 175, (y1 + y2) / 2, text, false, true));
         }
 
         createLine(x1, y1, x2, y2, className) {
@@ -868,6 +970,48 @@
         document.getElementById('select-standard').addEventListener('change', (e) => state.updateDesignConditions('standard', e.target.value));
         document.getElementById('input-designLife').addEventListener('change', (e) => state.updateDesignConditions('designLife', e.target.value));
         document.getElementById('select-environment').addEventListener('change', (e) => state.updateDesignConditions('environment', e.target.value));
+    }
+
+    // 지반정보 폼
+    function renderGroundInfoForm(container) {
+        const data = state.getGroundInfo();
+        container.innerHTML = `
+            <div class="form-grid">
+                <label class="form-label">토피</label>
+                <div class="input-with-unit">
+                    <input type="number" class="form-input" id="input-earthCoverDepth" value="${data.earthCoverDepth}" min="0" step="100" style="width: 100px;">
+                    <span class="input-unit">mm</span>
+                </div>
+                <label class="form-label">지하수위</label>
+                <div class="input-with-unit">
+                    <input type="number" class="form-input" id="input-groundwaterLevel" value="${data.groundwaterLevel}" min="0" step="100" style="width: 100px;">
+                    <span class="input-unit">mm</span>
+                </div>
+                <label class="form-label">흙의 내부마찰각</label>
+                <div class="input-with-unit">
+                    <input type="number" class="form-input" id="input-frictionAngle" value="${data.frictionAngle}" min="0" max="90" step="1" style="width: 100px;">
+                    <span class="input-unit">도</span>
+                </div>
+                <label class="form-label">흙의 단위중량</label>
+                <div class="input-with-unit">
+                    <input type="number" class="form-input" id="input-soilUnitWeight" value="${data.soilUnitWeight}" min="0" max="100" step="0.1" style="width: 100px;">
+                    <span class="input-unit">kN/m&sup3;</span>
+                </div>
+            </div>
+            <div class="form-section">
+                <div class="form-section-title">참고</div>
+                <div style="color: var(--text-secondary); font-size: 12px; line-height: 1.6;">
+                    <p>• 토피: 구조물 상부슬래브 상면에서 지표면까지의 거리</p>
+                    <p>• 지하수위: 지표면에서 지하수위까지의 거리</p>
+                    <p>• 흙의 내부마찰각: 일반적으로 25~35도</p>
+                    <p>• 흙의 단위중량: 일반적으로 16~20 kN/m&sup3;</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('input-earthCoverDepth').addEventListener('change', (e) => state.updateGroundInfo('earthCoverDepth', parseFloat(e.target.value) || 2000));
+        document.getElementById('input-groundwaterLevel').addEventListener('change', (e) => state.updateGroundInfo('groundwaterLevel', parseFloat(e.target.value) || 3000));
+        document.getElementById('input-frictionAngle').addEventListener('change', (e) => state.updateGroundInfo('frictionAngle', parseFloat(e.target.value) || 30));
+        document.getElementById('input-soilUnitWeight').addEventListener('change', (e) => state.updateGroundInfo('soilUnitWeight', parseFloat(e.target.value) || 18));
     }
 
     // 재료특성 폼
@@ -1510,7 +1654,11 @@
             autoSave();
         });
 
-        state.on('stateChange', () => autoSave());
+        state.on('stateChange', () => {
+            autoSave();
+            const renderer = getRenderer();
+            if (renderer) renderer.render(state.getSectionData());
+        });
 
         console.log('초기화 완료');
     });
@@ -1528,6 +1676,7 @@
             case '프로젝트 정보': renderProjectInfoForm(container); break;
             case '기본환경': renderBasicEnvironmentForm(container); break;
             case '재료특성': renderMaterialsForm(container); break;
+            case '지반정보': renderGroundInfoForm(container); break;
             case '단면제원': renderSectionPropertiesForm(container); break;
             default: renderPlaceholder(container, menu);
         }
