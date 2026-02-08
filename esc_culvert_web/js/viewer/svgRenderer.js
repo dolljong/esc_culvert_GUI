@@ -13,9 +13,10 @@ const DXF_COLORS = {
 };
 
 // 치수선 오프셋
-const DIM_OFFSET = 500;
-const DIM_OFFSET_FAR = 750;
+const DIM_OFFSET = 1000;
+const DIM_OFFSET_FAR = 1500;
 const ARROW_SIZE = 100;
+const EXT_LINE_GAP = 500;
 
 // 패딩 (뷰박스용)
 const PADDING = 1500;
@@ -188,10 +189,10 @@ export class SvgRenderer {
     drawDimensions(parent, data, dims) {
         const dimGroup = this.createGroup('dimensions');
 
-        // 1. 전체 폭 (하단)
+        // 1. 전체 폭 (하단, 바깥 tier)
         this.drawHorizontalDimension(
             dimGroup, 0, dims.totalWidth, 0,
-            -DIM_OFFSET, dims.totalWidth.toString()
+            -DIM_OFFSET_FAR, dims.totalWidth.toString()
         );
 
         // 2. 전체 높이 (우측)
@@ -220,28 +221,28 @@ export class SvgRenderer {
             }
         }
 
-        // 5. 상부 슬래브 UT (좌측 먼 쪽)
+        // 5. 상부 슬래브 UT (좌측, H와 동일 tier)
         this.drawVerticalDimension(
             dimGroup, 0, dims.LT + dims.H, dims.totalHeight,
-            -DIM_OFFSET_FAR, dims.UT.toString()
+            -DIM_OFFSET, dims.UT.toString()
         );
 
-        // 6. 하부 슬래브 LT (좌측 먼 쪽)
+        // 6. 하부 슬래브 LT (좌측, H와 동일 tier)
         this.drawVerticalDimension(
             dimGroup, 0, 0, dims.LT,
-            -DIM_OFFSET_FAR, dims.LT.toString()
+            -DIM_OFFSET, dims.LT.toString()
         );
 
-        // 7. 좌측 벽 WL (하단)
+        // 7. 좌측 벽 WL (상단)
         this.drawHorizontalDimension(
-            dimGroup, 0, dims.WL, 0,
-            -DIM_OFFSET_FAR, dims.WL.toString()
+            dimGroup, 0, dims.WL, dims.totalHeight,
+            DIM_OFFSET, dims.WL.toString()
         );
 
-        // 8. 우측 벽 WR (하단)
+        // 8. 우측 벽 WR (상단)
         this.drawHorizontalDimension(
-            dimGroup, dims.totalWidth - dims.WR, dims.totalWidth, 0,
-            -DIM_OFFSET_FAR, dims.WR.toString()
+            dimGroup, dims.totalWidth - dims.WR, dims.totalWidth, dims.totalHeight,
+            DIM_OFFSET, dims.WR.toString()
         );
 
         // 9. 중간벽 치수 (상단)
@@ -253,7 +254,7 @@ export class SvgRenderer {
                     const wallThickness = data.middle_walls[i].thickness;
                     this.drawHorizontalDimension(
                         dimGroup, xOffset, xOffset + wallThickness, dims.totalHeight,
-                        DIM_OFFSET_FAR, wallThickness.toString()
+                        DIM_OFFSET, wallThickness.toString()
                     );
                     xOffset += wallThickness;
                 }
@@ -266,10 +267,12 @@ export class SvgRenderer {
     // 수평 치수선
     drawHorizontalDimension(parent, x1, x2, y, offset, text) {
         const dimY = y + offset;
+        const sign = offset > 0 ? 1 : -1;
+        const extStart = y + sign * EXT_LINE_GAP;
 
         // 보조선 (연장선)
-        const ext1 = this.createLine(x1, y, x1, dimY, 'extension-line');
-        const ext2 = this.createLine(x2, y, x2, dimY, 'extension-line');
+        const ext1 = this.createLine(x1, extStart, x1, dimY, 'extension-line');
+        const ext2 = this.createLine(x2, extStart, x2, dimY, 'extension-line');
         parent.appendChild(ext1);
         parent.appendChild(ext2);
 
@@ -291,10 +294,12 @@ export class SvgRenderer {
     // 수직 치수선
     drawVerticalDimension(parent, x, y1, y2, offset, text) {
         const dimX = x + offset;
+        const sign = offset > 0 ? 1 : -1;
+        const extStart = x + sign * EXT_LINE_GAP;
 
         // 보조선 (연장선)
-        const ext1 = this.createLine(x, y1, dimX, y1, 'extension-line');
-        const ext2 = this.createLine(x, y2, dimX, y2, 'extension-line');
+        const ext1 = this.createLine(extStart, y1, dimX, y1, 'extension-line');
+        const ext2 = this.createLine(extStart, y2, dimX, y2, 'extension-line');
         parent.appendChild(ext1);
         parent.appendChild(ext2);
 

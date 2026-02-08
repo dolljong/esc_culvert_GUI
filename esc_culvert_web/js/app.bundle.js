@@ -308,9 +308,10 @@
     // SVG RENDERER - SVG 생성
     // ========================================
     const SVG_NS = 'http://www.w3.org/2000/svg';
-    const DIM_OFFSET = 500;
-    const DIM_OFFSET_FAR = 750;
+    const DIM_OFFSET = 1000;
+    const DIM_OFFSET_FAR = 1500;
     const ARROW_SIZE = 100;
+    const EXT_LINE_GAP = 500;
     const PADDING = 1500;
 
     let svgRenderer = null;
@@ -417,7 +418,7 @@
             const dimGroup = this.createGroup('dimensions');
 
             // 전체 폭/높이
-            this.drawHorizontalDimension(dimGroup, 0, dims.totalWidth, 0, -DIM_OFFSET, dims.totalWidth.toString());
+            this.drawHorizontalDimension(dimGroup, 0, dims.totalWidth, 0, -DIM_OFFSET_FAR, dims.totalWidth.toString());
             this.drawVerticalDimension(dimGroup, dims.totalWidth, 0, dims.totalHeight, DIM_OFFSET, dims.totalHeight.toString());
             this.drawVerticalDimension(dimGroup, 0, dims.LT, dims.LT + dims.H, -DIM_OFFSET, dims.H.toString());
 
@@ -431,10 +432,10 @@
             }
 
             // 슬래브, 벽체
-            this.drawVerticalDimension(dimGroup, 0, dims.LT + dims.H, dims.totalHeight, -DIM_OFFSET_FAR, dims.UT.toString());
-            this.drawVerticalDimension(dimGroup, 0, 0, dims.LT, -DIM_OFFSET_FAR, dims.LT.toString());
-            this.drawHorizontalDimension(dimGroup, 0, dims.WL, 0, -DIM_OFFSET_FAR, dims.WL.toString());
-            this.drawHorizontalDimension(dimGroup, dims.totalWidth - dims.WR, dims.totalWidth, 0, -DIM_OFFSET_FAR, dims.WR.toString());
+            this.drawVerticalDimension(dimGroup, 0, dims.LT + dims.H, dims.totalHeight, -DIM_OFFSET, dims.UT.toString());
+            this.drawVerticalDimension(dimGroup, 0, 0, dims.LT, -DIM_OFFSET, dims.LT.toString());
+            this.drawHorizontalDimension(dimGroup, 0, dims.WL, dims.totalHeight, DIM_OFFSET, dims.WL.toString());
+            this.drawHorizontalDimension(dimGroup, dims.totalWidth - dims.WR, dims.totalWidth, dims.totalHeight, DIM_OFFSET, dims.WR.toString());
 
             // 중간벽 치수
             if (data.middle_walls && data.middle_walls.length > 0) {
@@ -443,7 +444,7 @@
                     xOffset += data.B[i];
                     if (i < data.middle_walls.length) {
                         const wt = data.middle_walls[i].thickness;
-                        this.drawHorizontalDimension(dimGroup, xOffset, xOffset + wt, dims.totalHeight, DIM_OFFSET_FAR, wt.toString());
+                        this.drawHorizontalDimension(dimGroup, xOffset, xOffset + wt, dims.totalHeight, DIM_OFFSET, wt.toString());
                         xOffset += wt;
                     }
                 }
@@ -453,8 +454,10 @@
 
         drawHorizontalDimension(parent, x1, x2, y, offset, text) {
             const dimY = y + offset;
-            parent.appendChild(this.createLine(x1, y, x1, dimY, 'extension-line'));
-            parent.appendChild(this.createLine(x2, y, x2, dimY, 'extension-line'));
+            const sign = offset > 0 ? 1 : -1;
+            const extStart = y + sign * EXT_LINE_GAP;
+            parent.appendChild(this.createLine(x1, extStart, x1, dimY, 'extension-line'));
+            parent.appendChild(this.createLine(x2, extStart, x2, dimY, 'extension-line'));
             parent.appendChild(this.createLine(x1, dimY, x2, dimY, 'dimension-line'));
             this.drawArrow(parent, x1, dimY, 'right');
             this.drawArrow(parent, x2, dimY, 'left');
@@ -463,8 +466,10 @@
 
         drawVerticalDimension(parent, x, y1, y2, offset, text) {
             const dimX = x + offset;
-            parent.appendChild(this.createLine(x, y1, dimX, y1, 'extension-line'));
-            parent.appendChild(this.createLine(x, y2, dimX, y2, 'extension-line'));
+            const sign = offset > 0 ? 1 : -1;
+            const extStart = x + sign * EXT_LINE_GAP;
+            parent.appendChild(this.createLine(extStart, y1, dimX, y1, 'extension-line'));
+            parent.appendChild(this.createLine(extStart, y2, dimX, y2, 'extension-line'));
             parent.appendChild(this.createLine(dimX, y1, dimX, y2, 'dimension-line'));
             this.drawArrow(parent, dimX, y1, 'up');
             this.drawArrow(parent, dimX, y2, 'down');
