@@ -5,6 +5,8 @@ import { getRenderer } from '../viewer/svgRenderer.js';
 
 const WALL_TYPES = ['연속벽', '기둥'];
 
+let currentSectionTab = 'section';
+
 export function renderSectionPropertiesForm(container) {
     const data = state.getSectionData();
 
@@ -17,9 +19,13 @@ export function renderSectionPropertiesForm(container) {
             <span class="input-unit">(1~10)</span>
         </div>
 
-        <div class="section-table-container">
-            ${createSectionTable(data)}
+        <div class="section-tabs">
+            <button class="section-tab ${currentSectionTab === 'section' ? 'active' : ''}" data-tab="section">단면제원</button>
+            <button class="section-tab ${currentSectionTab === 'haunch' ? 'active' : ''}" data-tab="haunch">내부헌치</button>
+            <button class="section-tab ${currentSectionTab === 'antifloat' ? 'active' : ''}" data-tab="antifloat">부상방지저판</button>
         </div>
+
+        <div class="section-tab-content" id="section-tab-content"></div>
     `;
 
     // 암거 련수 변경 이벤트
@@ -27,14 +33,43 @@ export function renderSectionPropertiesForm(container) {
         const count = Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
         e.target.value = count;
         state.setCulvertCount(count);
-        // 테이블 재생성
         renderSectionPropertiesForm(container);
-        // SVG 업데이트
         updateSvg();
     });
 
-    // 테이블 입력 이벤트 등록
-    registerTableEvents();
+    // 탭 클릭 이벤트
+    document.querySelectorAll('.section-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            currentSectionTab = tab.dataset.tab;
+            document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            renderSectionTabContent();
+        });
+    });
+
+    renderSectionTabContent();
+}
+
+// 탭 콘텐츠 렌더링
+function renderSectionTabContent() {
+    const contentEl = document.getElementById('section-tab-content');
+    if (!contentEl) return;
+    const data = state.getSectionData();
+
+    switch (currentSectionTab) {
+        case 'section':
+            contentEl.innerHTML = `<div class="section-table-container">${createSectionTable(data)}</div>`;
+            registerTableEvents();
+            break;
+        case 'haunch':
+            contentEl.innerHTML = createHaunchForm(data);
+            registerHaunchEvents();
+            break;
+        case 'antifloat':
+            contentEl.innerHTML = createAntiFloatForm(data);
+            registerAntiFloatEvents();
+            break;
+    }
 }
 
 // 단면제원 테이블 생성
@@ -43,13 +78,9 @@ function createSectionTable(data) {
     const middleWallCount = culvertCount - 1;
 
     // 열 개수 계산
-    // H, H4, B1~Bn, UT, LT, WL, [벽체1, 두께1]...[벽체m, 두께m], WR
     const innerCols = 2 + culvertCount; // H, H4, B1...Bn
     const slabCols = 2; // UT, LT
-    const leftWallCol = 1; // WL
     const middleWallCols = middleWallCount * 2; // 타입, 두께 쌍
-    const rightWallCol = 1; // WR
-    const totalCols = innerCols + slabCols + leftWallCol + middleWallCols + rightWallCol;
 
     // 헤더 Row 0: 대분류
     let header0 = '<tr>';
@@ -81,36 +112,25 @@ function createSectionTable(data) {
 
     // 데이터 Row
     let dataRow = '<tr>';
-
-    // H
     dataRow += `<td><input type="number" id="input-H" value="${data.H}" data-field="H"></td>`;
-    // H4
     dataRow += `<td><input type="number" id="input-H4" value="${data.H4}" data-field="H4"></td>`;
-    // B1~Bn
     for (let i = 0; i < culvertCount; i++) {
         const bValue = data.B[i] !== undefined ? data.B[i] : 4000;
         dataRow += `<td><input type="number" id="input-B${i}" value="${bValue}" data-field="B" data-index="${i}"></td>`;
     }
-    // UT
     dataRow += `<td><input type="number" id="input-UT" value="${data.UT}" data-field="UT"></td>`;
-    // LT
     dataRow += `<td><input type="number" id="input-LT" value="${data.LT}" data-field="LT"></td>`;
-    // WL
     dataRow += `<td><input type="number" id="input-WL" value="${data.WL}" data-field="WL"></td>`;
 
-    // 중간벽
     for (let i = 0; i < middleWallCount; i++) {
         const wall = data.middle_walls[i] || { type: '연속벽', thickness: 600 };
-        // 벽체 타입 (select)
         const typeOptions = WALL_TYPES.map(t =>
             `<option value="${t}" ${wall.type === t ? 'selected' : ''}>${t}</option>`
         ).join('');
         dataRow += `<td><select id="input-wallType${i}" data-field="wallType" data-index="${i}">${typeOptions}</select></td>`;
-        // 벽체 두께
         dataRow += `<td><input type="number" id="input-wallThickness${i}" value="${wall.thickness}" data-field="wallThickness" data-index="${i}"></td>`;
     }
 
-    // WR
     dataRow += `<td><input type="number" id="input-WR" value="${data.WR}" data-field="WR"></td>`;
     dataRow += '</tr>';
 
@@ -130,12 +150,163 @@ function createSectionTable(data) {
     `;
 }
 
+// 내부헌치 기본값 헬퍼
+function safeCorner(c) {
+    if (!c) return { width: 150, height: 150 };
+    return { width: c.width || 150, height: c.height || 150 };
+}
+
+function getHaunchData(data) {
+    const h = data.haunch || {};
+    const lw = h.leftWall || {};
+    const rw = h.rightWall || {};
+    const mw = Array.isArray(h.middleWalls) ? h.middleWalls : [];
+    const middleWallCount = (data.culvert_count || 1) - 1;
+    const middleWalls = [];
+    for (let i = 0; i < middleWallCount; i++) {
+        const m = mw[i] || {};
+        middleWalls.push({ upper: safeCorner(m.upper), lower: safeCorner(m.lower) });
+    }
+    return {
+        leftWall:  { upper: safeCorner(lw.upper), lower: safeCorner(lw.lower) },
+        middleWalls,
+        rightWall: { upper: safeCorner(rw.upper), lower: safeCorner(rw.lower) }
+    };
+}
+
+// 벽체 카드 HTML 생성
+function createWallCard(title, wallKey, wallData, index) {
+    const idx = index !== undefined ? ` data-index="${index}"` : '';
+    return `<div class="haunch-card">
+        <div class="haunch-card-title">${title}</div>
+        <table class="sub-section-table">
+            <thead><tr><th></th><th>폭</th><th>높이</th></tr></thead>
+            <tbody>
+                <tr><th>상단</th>
+                    <td><input type="number" value="${wallData.upper.width}" data-wall="${wallKey}"${idx} data-pos="upper" data-dim="width" step="50"></td>
+                    <td><input type="number" value="${wallData.upper.height}" data-wall="${wallKey}"${idx} data-pos="upper" data-dim="height" step="50"></td>
+                </tr>
+                <tr><th>하단</th>
+                    <td><input type="number" value="${wallData.lower.width}" data-wall="${wallKey}"${idx} data-pos="lower" data-dim="width" step="50"></td>
+                    <td><input type="number" value="${wallData.lower.height}" data-wall="${wallKey}"${idx} data-pos="lower" data-dim="height" step="50"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>`;
+}
+
+// 내부헌치 폼 생성
+function createHaunchForm(data) {
+    const h = getHaunchData(data);
+    const middleWallCount = (data.culvert_count || 1) - 1;
+
+    let cards = createWallCard('좌측벽체', 'leftWall', h.leftWall);
+    for (let i = 0; i < middleWallCount; i++) {
+        cards += createWallCard(`중간벽체${i + 1}`, 'middleWall', h.middleWalls[i], i);
+    }
+    cards += createWallCard('우측벽체', 'rightWall', h.rightWall);
+
+    return `
+        <div class="haunch-cards">${cards}</div>
+        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm &nbsp;|&nbsp; 좌측벽체 입력 시 우측벽체 자동 동기화</div>`;
+}
+
+// 내부헌치 이벤트 등록
+function registerHaunchEvents() {
+    document.querySelectorAll('.haunch-card input[type="number"]').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const wall = e.target.dataset.wall;
+            const pos = e.target.dataset.pos;
+            const dim = e.target.dataset.dim;
+            const value = parseFloat(e.target.value) || 0;
+            const data = state.getSectionData();
+            const haunch = getHaunchData(data);
+            if (wall === 'middleWall') {
+                const idx = parseInt(e.target.dataset.index);
+                haunch.middleWalls[idx][pos][dim] = value;
+            } else {
+                haunch[wall][pos][dim] = value;
+            }
+            // 좌측벽체 → 우측벽체 자동 동기화
+            if (wall === 'leftWall') {
+                haunch.rightWall[pos][dim] = value;
+            }
+            state.updateSectionData('haunch', haunch);
+            updateSvg();
+            if (wall === 'leftWall') {
+                renderSectionTabContent();
+            }
+        });
+    });
+}
+
+// 부상방지저판 폼 생성
+function createAntiFloatForm(data) {
+    const af = data.antiFloat || { use: false, leftExtension: 500, rightExtension: 500, thickness: 300 };
+    return `
+        <div style="margin-bottom: 12px;">
+            <label style="font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="antifloat-use" ${af.use ? 'checked' : ''}> 부상방지저판 적용
+            </label>
+        </div>
+        <table class="sub-section-table">
+            <thead>
+                <tr>
+                    <th>좌측 확장폭 (mm)</th>
+                    <th>우측 확장폭 (mm)</th>
+                    <th>두께 (mm)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><input type="number" id="antifloat-left" value="${af.leftExtension}" ${af.use ? '' : 'disabled'}></td>
+                    <td><input type="number" id="antifloat-right" value="${af.rightExtension}" ${af.use ? '' : 'disabled'}></td>
+                    <td><input type="number" id="antifloat-thickness" value="${af.thickness}" ${af.use ? '' : 'disabled'}></td>
+                </tr>
+            </tbody>
+        </table>
+        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm</div>`;
+}
+
+// 부상방지저판 이벤트 등록
+function registerAntiFloatEvents() {
+    const useCheck = document.getElementById('antifloat-use');
+    if (!useCheck) return;
+
+    useCheck.addEventListener('change', (e) => {
+        const data = state.getSectionData();
+        const af = { ...(data.antiFloat || {}) };
+        af.use = e.target.checked;
+        state.updateSectionData('antiFloat', af);
+        renderSectionTabContent();
+        updateSvg();
+    });
+
+    const fields = [
+        { id: 'antifloat-left', key: 'leftExtension' },
+        { id: 'antifloat-right', key: 'rightExtension' },
+        { id: 'antifloat-thickness', key: 'thickness' }
+    ];
+    fields.forEach(({ id, key }) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', (e) => {
+                const value = parseFloat(e.target.value) || 0;
+                const data = state.getSectionData();
+                const af = { ...(data.antiFloat || {}) };
+                af[key] = value;
+                state.updateSectionData('antiFloat', af);
+                updateSvg();
+            });
+        }
+    });
+}
+
 // 테이블 입력 이벤트 등록
 function registerTableEvents() {
     const table = document.querySelector('.section-table');
     if (!table) return;
 
-    // 모든 입력 필드에 이벤트 등록
     const inputs = table.querySelectorAll('input, select');
     inputs.forEach(input => {
         input.addEventListener('change', handleInputChange);

@@ -30,7 +30,21 @@ const defaultState = {
         middle_walls: [
             { type: '연속벽', thickness: 600 },
             { type: '연속벽', thickness: 600 }
-        ]
+        ],
+        haunch: {
+            leftWall:  { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } },
+            middleWalls: [
+                { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } },
+                { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
+            ],
+            rightWall: { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
+        },
+        antiFloat: {
+            use: false,
+            leftExtension: 500,
+            rightExtension: 500,
+            thickness: 300
+        }
     }
 };
 
@@ -131,6 +145,16 @@ export const state = {
             newMiddleWalls.push({ type: '연속벽', thickness: 600 });
         }
         newMiddleWalls.length = middleWallCount;
+
+        // 헌치 중간벽 배열 크기 조정
+        const haunch = appState.sectionData.haunch || {};
+        const haunchMW = haunch.middleWalls ? [...haunch.middleWalls] : [];
+        while (haunchMW.length < middleWallCount) {
+            haunchMW.push({ upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } });
+        }
+        haunchMW.length = middleWallCount;
+        if (!appState.sectionData.haunch) appState.sectionData.haunch = {};
+        appState.sectionData.haunch.middleWalls = haunchMW;
 
         appState.sectionData.culvert_count = count;
         appState.sectionData.B = newB;

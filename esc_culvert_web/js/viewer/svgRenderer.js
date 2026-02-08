@@ -51,10 +51,16 @@ export class SvgRenderer {
         const mainGroup = this.createGroup('main-group');
 
         // 외곽선 그리기
-        this.drawOuterProfile(mainGroup, dims);
+        this.drawOuterProfile(mainGroup, culvertData, dims);
 
         // 내부 공간 그리기
         this.drawInnerCompartments(mainGroup, culvertData, dims);
+
+        // 헌치 그리기
+        this.drawHaunches(mainGroup, culvertData, dims);
+
+        // 부상방지저판 그리기
+        this.drawAntiFloatSlab(mainGroup, culvertData, dims);
 
         // 치수선 그리기
         this.drawDimensions(mainGroup, culvertData, dims);
@@ -62,7 +68,7 @@ export class SvgRenderer {
         this.svg.appendChild(mainGroup);
 
         // 뷰박스 설정
-        this.setViewBox(dims);
+        this.setViewBox(culvertData, dims);
     }
 
     // 데이터 검증
@@ -114,15 +120,17 @@ export class SvgRenderer {
     }
 
     // 뷰박스 설정
-    setViewBox(dims) {
-        const minX = -PADDING;
-        const minY = -PADDING;
-        const width = dims.totalWidth + PADDING * 2;
+    setViewBox(data, dims) {
+        const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+        const extL = af ? (af.leftExtension || 0) : 0;
+        const extR = af ? (af.rightExtension || 0) : 0;
+        const minX = -extL - PADDING;
+        const width = dims.totalWidth + extL + extR + PADDING * 2;
         const height = dims.totalHeight + PADDING * 2;
 
         // Y축 반전을 위해 transform 사용
         this.svg.setAttribute('viewBox', `${minX} ${-dims.totalHeight - PADDING} ${width} ${height}`);
-        this.viewBox = { x: minX, y: minY, width, height };
+        this.viewBox = { x: minX, y: -PADDING, width, height };
 
         // 전체 그룹에 Y축 반전 적용
         const mainGroup = this.svg.querySelector('.main-group');
@@ -139,17 +147,47 @@ export class SvgRenderer {
     }
 
     // 외곽선 그리기
-    drawOuterProfile(parent, dims) {
-        const points = [
-            [0, 0],
-            [dims.totalWidth, 0],
-            [dims.totalWidth, dims.totalHeight],
-            [0, dims.totalHeight],
-            [0, 0]
-        ];
+    drawOuterProfile(parent, data, dims) {
+        const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+        const t = af ? (af.thickness || 0) : 0;
 
-        const polyline = this.createPolyline(points, 'outer-line');
-        parent.appendChild(polyline);
+        if (af && t > 0) {
+            // 부상방지저판이 있는 경우: 벽체 하단을 저판 상단(y=t)으로
+            const points = [
+                [0, t], [0, dims.totalHeight],
+                [dims.totalWidth, dims.totalHeight], [dims.totalWidth, t]
+            ];
+            parent.appendChild(this.createPolyline(points, 'outer-line'));
+            // 하부 바닥선
+            parent.appendChild(this.createLine(0, 0, dims.totalWidth, 0, 'outer-line'));
+        } else {
+            const points = [
+                [0, 0], [dims.totalWidth, 0],
+                [dims.totalWidth, dims.totalHeight],
+                [0, dims.totalHeight], [0, 0]
+            ];
+            parent.appendChild(this.createPolyline(points, 'outer-line'));
+        }
+    }
+
+    // 칸별 헌치 데이터 가져오기
+    getCompartmentHaunches(data, i) {
+        const h = data.haunch || {};
+        const lw = h.leftWall || {};
+        const rw = h.rightWall || {};
+        const mw = Array.isArray(h.middleWalls) ? h.middleWalls : [];
+        const last = data.culvert_count - 1;
+        const zero = { width: 0, height: 0 };
+
+        const leftWall  = (i === 0)    ? lw : (mw[i - 1] || {});
+        const rightWall = (i === last)  ? rw : (mw[i] || {});
+
+        return {
+            ul: leftWall.upper  || zero,
+            ll: leftWall.lower  || zero,
+            ur: rightWall.upper || zero,
+            lr: rightWall.lower || zero
+        };
     }
 
     // 내부 공간 그리기
@@ -158,21 +196,74 @@ export class SvgRenderer {
 
         for (let i = 0; i < data.culvert_count; i++) {
             const B = data.B[i];
-            const points = [
-                [xOffset, dims.LT],
-                [xOffset + B, dims.LT],
-                [xOffset + B, dims.LT + dims.H],
-                [xOffset, dims.LT + dims.H],
-                [xOffset, dims.LT]
-            ];
+            const left = xOffset;
+            const right = xOffset + B;
+            const bottom = dims.LT;
+            const top = dims.LT + dims.H;
+            const { ul, ur, ll, lr } = this.getCompartmentHaunches(data, i);
 
-            const polyline = this.createPolyline(points, 'inner-line');
-            parent.appendChild(polyline);
+            parent.appendChild(this.createLine(left + ll.width, bottom, right - lr.width, bottom, 'inner-line'));
+            parent.appendChild(this.createLine(right, bottom + lr.height, right, top - ur.height, 'inner-line'));
+            parent.appendChild(this.createLine(right - ur.width, top, left + ul.width, top, 'inner-line'));
+            parent.appendChild(this.createLine(left, top - ul.height, left, bottom + ll.height, 'inner-line'));
 
             xOffset += B;
             if (i < data.middle_walls.length) {
                 xOffset += data.middle_walls[i].thickness;
             }
+        }
+    }
+
+    // 헌치 그리기
+    drawHaunches(parent, data, dims) {
+        let xOffset = data.WL;
+
+        for (let i = 0; i < data.culvert_count; i++) {
+            const B = data.B[i];
+            const left = xOffset;
+            const right = xOffset + B;
+            const bottom = dims.LT;
+            const top = dims.LT + dims.H;
+            const { ul, ur, ll, lr } = this.getCompartmentHaunches(data, i);
+
+            if (ul.width > 0 && ul.height > 0)
+                parent.appendChild(this.createLine(left, top - ul.height, left + ul.width, top, 'inner-line'));
+            if (ur.width > 0 && ur.height > 0)
+                parent.appendChild(this.createLine(right - ur.width, top, right, top - ur.height, 'inner-line'));
+            if (ll.width > 0 && ll.height > 0)
+                parent.appendChild(this.createLine(left, bottom + ll.height, left + ll.width, bottom, 'inner-line'));
+            if (lr.width > 0 && lr.height > 0)
+                parent.appendChild(this.createLine(right - lr.width, bottom, right, bottom + lr.height, 'inner-line'));
+
+            xOffset += B;
+            if (i < data.middle_walls.length) {
+                xOffset += data.middle_walls[i].thickness;
+            }
+        }
+    }
+
+    // 부상방지저판 그리기
+    drawAntiFloatSlab(parent, data, dims) {
+        const af = data.antiFloat;
+        if (!af || !af.use) return;
+        const lExt = af.leftExtension || 0;
+        const rExt = af.rightExtension || 0;
+        const t = af.thickness || 0;
+        if (lExt <= 0 && rExt <= 0 && t <= 0) return;
+        // 좌측 돌출부 (벽체 하단에서 바깥쪽, 바닥 y=0 일치)
+        if (lExt > 0) {
+            const leftPoly = this.createPolyline([
+                [0, t], [-lExt, t], [-lExt, 0], [0, 0]
+            ], 'outer-line');
+            parent.appendChild(leftPoly);
+        }
+        // 우측 돌출부
+        if (rExt > 0) {
+            const rightPoly = this.createPolyline([
+                [dims.totalWidth, t], [dims.totalWidth + rExt, t],
+                [dims.totalWidth + rExt, 0], [dims.totalWidth, 0]
+            ], 'outer-line');
+            parent.appendChild(rightPoly);
         }
     }
 
@@ -189,21 +280,26 @@ export class SvgRenderer {
     drawDimensions(parent, data, dims) {
         const dimGroup = this.createGroup('dimensions');
 
+        // 부상방지저판 유무에 따른 수직치수선 원점
+        const afData = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+        const leftX = afData ? -(afData.leftExtension || 0) : 0;
+        const rightX = afData ? dims.totalWidth + (afData.rightExtension || 0) : dims.totalWidth;
+
         // 1. 전체 폭 (하단, 바깥 tier)
         this.drawHorizontalDimension(
             dimGroup, 0, dims.totalWidth, 0,
-            -DIM_OFFSET_FAR, dims.totalWidth.toString()
+            -DIM_OFFSET, dims.totalWidth.toString()
         );
 
         // 2. 전체 높이 (우측)
         this.drawVerticalDimension(
-            dimGroup, dims.totalWidth, 0, dims.totalHeight,
+            dimGroup, rightX, 0, dims.totalHeight,
             DIM_OFFSET, dims.totalHeight.toString()
         );
 
         // 3. 내공 높이 H (좌측)
         this.drawVerticalDimension(
-            dimGroup, 0, dims.LT, dims.LT + dims.H,
+            dimGroup, leftX, dims.LT, dims.LT + dims.H,
             -DIM_OFFSET, dims.H.toString()
         );
 
@@ -223,13 +319,13 @@ export class SvgRenderer {
 
         // 5. 상부 슬래브 UT (좌측, H와 동일 tier)
         this.drawVerticalDimension(
-            dimGroup, 0, dims.LT + dims.H, dims.totalHeight,
+            dimGroup, leftX, dims.LT + dims.H, dims.totalHeight,
             -DIM_OFFSET, dims.UT.toString()
         );
 
         // 6. 하부 슬래브 LT (좌측, H와 동일 tier)
         this.drawVerticalDimension(
-            dimGroup, 0, 0, dims.LT,
+            dimGroup, leftX, 0, dims.LT,
             -DIM_OFFSET, dims.LT.toString()
         );
 
@@ -261,6 +357,20 @@ export class SvgRenderer {
             }
         }
 
+        // 부상방지저판 치수 (좌측에만)
+        if (afData) {
+            const lExt = afData.leftExtension || 0;
+            const t = afData.thickness || 0;
+            if (lExt > 0) {
+                // 좌측 돌출폭 (수평, 바닥 y=0 기준)
+                this.drawHorizontalDimension(dimGroup, -lExt, 0, 0, -DIM_OFFSET, lExt.toString());
+            }
+            if (t > 0) {
+                // 두께 (수직, 좌측 돌출부 왼쪽 면)
+                this.drawVerticalDimension(dimGroup, -lExt, 0, t, -DIM_OFFSET, t.toString());
+            }
+        }
+
         parent.appendChild(dimGroup);
     }
 
@@ -286,7 +396,7 @@ export class SvgRenderer {
 
         // 텍스트
         const textX = (x1 + x2) / 2;
-        const textY = dimY + (offset > 0 ? 150 : -100);
+        const textY = dimY + 150;
         const textEl = this.createText(textX, textY, text, offset < 0);
         parent.appendChild(textEl);
     }
@@ -312,7 +422,7 @@ export class SvgRenderer {
         this.drawArrow(parent, dimX, y2, 'down');
 
         // 텍스트 (회전)
-        const textX = dimX + (offset > 0 ? 150 : -100);
+        const textX = dimX - 150;
         const textY = (y1 + y2) / 2;
         const textEl = this.createText(textX, textY, text, false, true);
         parent.appendChild(textEl);

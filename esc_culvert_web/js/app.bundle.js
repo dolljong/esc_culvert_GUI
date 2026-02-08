@@ -36,7 +36,21 @@
             middle_walls: [
                 { type: '연속벽', thickness: 600 },
                 { type: '연속벽', thickness: 600 }
-            ]
+            ],
+            haunch: {
+                leftWall:  { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } },
+                middleWalls: [
+                    { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } },
+                    { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
+                ],
+                rightWall: { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
+            },
+            antiFloat: {
+                use: false,
+                leftExtension: 500,
+                rightExtension: 500,
+                thickness: 300
+            }
         }
     };
 
@@ -94,6 +108,16 @@
                 newMiddleWalls.push({ type: '연속벽', thickness: 600 });
             }
             newMiddleWalls.length = middleWallCount;
+
+            // 헌치 중간벽 배열 동기화
+            const haunch = appState.sectionData.haunch || {};
+            const haunchMW = haunch.middleWalls ? [...haunch.middleWalls] : [];
+            while (haunchMW.length < middleWallCount) {
+                haunchMW.push({ upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } });
+            }
+            haunchMW.length = middleWallCount;
+            if (!appState.sectionData.haunch) appState.sectionData.haunch = {};
+            appState.sectionData.haunch.middleWalls = haunchMW;
 
             appState.sectionData.culvert_count = count;
             appState.sectionData.B = newB;
@@ -332,12 +356,14 @@
             const dims = this.calculateDimensions(culvertData);
             const mainGroup = this.createGroup('main-group');
 
-            this.drawOuterProfile(mainGroup, dims);
+            this.drawOuterProfile(mainGroup, culvertData, dims);
+            this.drawAntiFloatSlab(mainGroup, culvertData, dims);
             this.drawInnerCompartments(mainGroup, culvertData, dims);
+            this.drawHaunches(mainGroup, culvertData, dims);
             this.drawDimensions(mainGroup, culvertData, dims);
 
             this.svg.appendChild(mainGroup);
-            this.setViewBox(dims);
+            this.setViewBox(culvertData, dims);
         }
 
         validateData(data) {
@@ -374,9 +400,12 @@
                      H: data.H, LT: data.LT, UT: data.UT, WL: data.WL, WR: data.WR };
         }
 
-        setViewBox(dims) {
-            const minX = -PADDING;
-            const width = dims.totalWidth + PADDING * 2;
+        setViewBox(data, dims) {
+            const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+            const extL = af ? (af.leftExtension || 0) : 0;
+            const extR = af ? (af.rightExtension || 0) : 0;
+            const minX = -extL - PADDING;
+            const width = dims.totalWidth + extL + extR + PADDING * 2;
             const height = dims.totalHeight + PADDING * 2;
             this.svg.setAttribute('viewBox', `${minX} ${-dims.totalHeight - PADDING} ${width} ${height}`);
             const mainGroup = this.svg.querySelector('.main-group');
@@ -389,19 +418,92 @@
             return g;
         }
 
-        drawOuterProfile(parent, dims) {
-            const points = [[0, 0], [dims.totalWidth, 0], [dims.totalWidth, dims.totalHeight],
-                           [0, dims.totalHeight], [0, 0]];
-            parent.appendChild(this.createPolyline(points, 'outer-line'));
+        drawOuterProfile(parent, data, dims) {
+            const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+            const t = af ? (af.thickness || 0) : 0;
+
+            if (af && t > 0) {
+                // 부상방지저판이 있는 경우: 벽체 하단을 저판 상단(y=t)으로
+                const points = [[0, t], [0, dims.totalHeight], [dims.totalWidth, dims.totalHeight],
+                               [dims.totalWidth, t]];
+                parent.appendChild(this.createPolyline(points, 'outer-line'));
+                // 하부 바닥선
+                parent.appendChild(this.createLine(0, 0, dims.totalWidth, 0, 'outer-line'));
+            } else {
+                const points = [[0, 0], [dims.totalWidth, 0], [dims.totalWidth, dims.totalHeight],
+                               [0, dims.totalHeight], [0, 0]];
+                parent.appendChild(this.createPolyline(points, 'outer-line'));
+            }
+        }
+
+        drawAntiFloatSlab(parent, data, dims) {
+            const af = data.antiFloat;
+            if (!af || !af.use) return;
+            const lExt = af.leftExtension || 0;
+            const rExt = af.rightExtension || 0;
+            const t = af.thickness || 0;
+            if (lExt <= 0 && rExt <= 0 && t <= 0) return;
+            // 좌측 돌출부 (벽체 하단에서 바깥쪽, 바닥 y=0 일치)
+            if (lExt > 0) {
+                const leftPoly = this.createPolyline([
+                    [0, t], [-lExt, t], [-lExt, 0], [0, 0]
+                ], 'outer-line');
+                parent.appendChild(leftPoly);
+            }
+            // 우측 돌출부
+            if (rExt > 0) {
+                const rightPoly = this.createPolyline([
+                    [dims.totalWidth, t], [dims.totalWidth + rExt, t],
+                    [dims.totalWidth + rExt, 0], [dims.totalWidth, 0]
+                ], 'outer-line');
+                parent.appendChild(rightPoly);
+            }
+        }
+
+        getCompartmentHaunches(data, i) {
+            const h = getHaunchData(data);
+            const last = data.culvert_count - 1;
+            const leftWall  = (i === 0)    ? h.leftWall  : h.middleWalls[i - 1];
+            const rightWall = (i === last)  ? h.rightWall : h.middleWalls[i];
+            return {
+                ul: leftWall  ? leftWall.upper  : { width: 0, height: 0 },
+                ll: leftWall  ? leftWall.lower  : { width: 0, height: 0 },
+                ur: rightWall ? rightWall.upper : { width: 0, height: 0 },
+                lr: rightWall ? rightWall.lower : { width: 0, height: 0 }
+            };
         }
 
         drawInnerCompartments(parent, data, dims) {
             let xOffset = data.WL;
             for (let i = 0; i < data.culvert_count; i++) {
                 const B = data.B[i];
-                const points = [[xOffset, dims.LT], [xOffset + B, dims.LT],
-                               [xOffset + B, dims.LT + dims.H], [xOffset, dims.LT + dims.H], [xOffset, dims.LT]];
-                parent.appendChild(this.createPolyline(points, 'inner-line'));
+                const left = xOffset, right = xOffset + B;
+                const bottom = dims.LT, top = dims.LT + dims.H;
+                const { ul, ur, ll, lr } = this.getCompartmentHaunches(data, i);
+                parent.appendChild(this.createLine(left + ll.width, bottom, right - lr.width, bottom, 'inner-line'));
+                parent.appendChild(this.createLine(right, bottom + lr.height, right, top - ur.height, 'inner-line'));
+                parent.appendChild(this.createLine(right - ur.width, top, left + ul.width, top, 'inner-line'));
+                parent.appendChild(this.createLine(left, top - ul.height, left, bottom + ll.height, 'inner-line'));
+                xOffset += B;
+                if (i < data.middle_walls.length) xOffset += data.middle_walls[i].thickness;
+            }
+        }
+
+        drawHaunches(parent, data, dims) {
+            let xOffset = data.WL;
+            for (let i = 0; i < data.culvert_count; i++) {
+                const B = data.B[i];
+                const left = xOffset, right = xOffset + B;
+                const bottom = dims.LT, top = dims.LT + dims.H;
+                const { ul, ur, ll, lr } = this.getCompartmentHaunches(data, i);
+                if (ul.width > 0 && ul.height > 0)
+                    parent.appendChild(this.createLine(left, top - ul.height, left + ul.width, top, 'inner-line'));
+                if (ur.width > 0 && ur.height > 0)
+                    parent.appendChild(this.createLine(right - ur.width, top, right, top - ur.height, 'inner-line'));
+                if (ll.width > 0 && ll.height > 0)
+                    parent.appendChild(this.createLine(left, bottom + ll.height, left + ll.width, bottom, 'inner-line'));
+                if (lr.width > 0 && lr.height > 0)
+                    parent.appendChild(this.createLine(right - lr.width, bottom, right, bottom + lr.height, 'inner-line'));
                 xOffset += B;
                 if (i < data.middle_walls.length) xOffset += data.middle_walls[i].thickness;
             }
@@ -417,10 +519,15 @@
         drawDimensions(parent, data, dims) {
             const dimGroup = this.createGroup('dimensions');
 
+            // 부상방지저판 유무에 따른 수직치수선 원점
+            const afData = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+            const leftX = afData ? -(afData.leftExtension || 0) : 0;
+            const rightX = afData ? dims.totalWidth + (afData.rightExtension || 0) : dims.totalWidth;
+
             // 전체 폭/높이
-            this.drawHorizontalDimension(dimGroup, 0, dims.totalWidth, 0, -DIM_OFFSET_FAR, dims.totalWidth.toString());
-            this.drawVerticalDimension(dimGroup, dims.totalWidth, 0, dims.totalHeight, DIM_OFFSET, dims.totalHeight.toString());
-            this.drawVerticalDimension(dimGroup, 0, dims.LT, dims.LT + dims.H, -DIM_OFFSET, dims.H.toString());
+            this.drawHorizontalDimension(dimGroup, 0, dims.totalWidth, 0, -DIM_OFFSET, dims.totalWidth.toString());
+            this.drawVerticalDimension(dimGroup, rightX, 0, dims.totalHeight, DIM_OFFSET, dims.totalHeight.toString());
+            this.drawVerticalDimension(dimGroup, leftX, dims.LT, dims.LT + dims.H, -DIM_OFFSET, dims.H.toString());
 
             // 각 내공 폭
             let xOffset = data.WL;
@@ -432,8 +539,8 @@
             }
 
             // 슬래브, 벽체
-            this.drawVerticalDimension(dimGroup, 0, dims.LT + dims.H, dims.totalHeight, -DIM_OFFSET, dims.UT.toString());
-            this.drawVerticalDimension(dimGroup, 0, 0, dims.LT, -DIM_OFFSET, dims.LT.toString());
+            this.drawVerticalDimension(dimGroup, leftX, dims.LT + dims.H, dims.totalHeight, -DIM_OFFSET, dims.UT.toString());
+            this.drawVerticalDimension(dimGroup, leftX, 0, dims.LT, -DIM_OFFSET, dims.LT.toString());
             this.drawHorizontalDimension(dimGroup, 0, dims.WL, dims.totalHeight, DIM_OFFSET, dims.WL.toString());
             this.drawHorizontalDimension(dimGroup, dims.totalWidth - dims.WR, dims.totalWidth, dims.totalHeight, DIM_OFFSET, dims.WR.toString());
 
@@ -449,6 +556,20 @@
                     }
                 }
             }
+            // 부상방지저판 치수 (좌측에만)
+            if (afData) {
+                const lExt = afData.leftExtension || 0;
+                const t = afData.thickness || 0;
+                if (lExt > 0) {
+                    // 좌측 돌출폭 (수평, 바닥 y=0 기준)
+                    this.drawHorizontalDimension(dimGroup, -lExt, 0, 0, -DIM_OFFSET, lExt.toString());
+                }
+                if (t > 0) {
+                    // 두께 (수직, 좌측 돌출부 왼쪽 면)
+                    this.drawVerticalDimension(dimGroup, -lExt, 0, t, -DIM_OFFSET, t.toString());
+                }
+            }
+
             parent.appendChild(dimGroup);
         }
 
@@ -461,7 +582,7 @@
             parent.appendChild(this.createLine(x1, dimY, x2, dimY, 'dimension-line'));
             this.drawArrow(parent, x1, dimY, 'right');
             this.drawArrow(parent, x2, dimY, 'left');
-            parent.appendChild(this.createText((x1 + x2) / 2, dimY + (offset > 0 ? 300 : -150), text, offset < 0));
+            parent.appendChild(this.createText((x1 + x2) / 2, dimY + 300, text, offset < 0));
         }
 
         drawVerticalDimension(parent, x, y1, y2, offset, text) {
@@ -473,7 +594,7 @@
             parent.appendChild(this.createLine(dimX, y1, dimX, y2, 'dimension-line'));
             this.drawArrow(parent, dimX, y1, 'up');
             this.drawArrow(parent, dimX, y2, 'down');
-            parent.appendChild(this.createText(dimX + (offset > 0 ? 300 : -150), (y1 + y2) / 2, text, false, true));
+            parent.appendChild(this.createText(dimX - 300, (y1 + y2) / 2, text, false, true));
         }
 
         createLine(x1, y1, x2, y2, className) {
@@ -780,6 +901,8 @@
     // 단면제원 폼
     const WALL_TYPES = ['연속벽', '기둥'];
 
+    let currentSectionTab = 'section';
+
     function renderSectionPropertiesForm(container) {
         const data = state.getSectionData();
         container.innerHTML = `
@@ -788,7 +911,12 @@
                 <input type="number" class="form-input" id="input-culvert-count" value="${data.culvert_count}" min="1" max="10" step="1">
                 <span class="input-unit">(1~10)</span>
             </div>
-            <div class="section-table-container">${createSectionTable(data)}</div>
+            <div class="section-tabs">
+                <button class="section-tab ${currentSectionTab === 'section' ? 'active' : ''}" data-tab="section">단면제원</button>
+                <button class="section-tab ${currentSectionTab === 'haunch' ? 'active' : ''}" data-tab="haunch">내부헌치</button>
+                <button class="section-tab ${currentSectionTab === 'antifloat' ? 'active' : ''}" data-tab="antifloat">부상방지저판</button>
+            </div>
+            <div class="section-tab-content" id="section-tab-content"></div>
         `;
 
         document.getElementById('input-culvert-count').addEventListener('change', (e) => {
@@ -799,7 +927,37 @@
             updateSvg();
         });
 
-        registerTableEvents();
+        document.querySelectorAll('.section-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                currentSectionTab = tab.dataset.tab;
+                document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderSectionTabContent();
+            });
+        });
+
+        renderSectionTabContent();
+    }
+
+    function renderSectionTabContent() {
+        const contentEl = document.getElementById('section-tab-content');
+        if (!contentEl) return;
+        const data = state.getSectionData();
+
+        switch (currentSectionTab) {
+            case 'section':
+                contentEl.innerHTML = `<div class="section-table-container">${createSectionTable(data)}</div>`;
+                registerTableEvents();
+                break;
+            case 'haunch':
+                contentEl.innerHTML = createHaunchForm(data);
+                registerHaunchEvents();
+                break;
+            case 'antifloat':
+                contentEl.innerHTML = createAntiFloatForm(data);
+                registerAntiFloatEvents();
+                break;
+        }
     }
 
     function createSectionTable(data) {
@@ -886,6 +1044,159 @@
     function updateSvg() {
         const renderer = getRenderer();
         if (renderer) renderer.render(state.getSectionData());
+    }
+
+    // 내부헌치 기본값 헬퍼
+    const DEFAULT_CORNER = { width: 150, height: 150 };
+
+    function safeCorner(c) {
+        if (!c) return { ...DEFAULT_CORNER };
+        return { width: c.width || 150, height: c.height || 150 };
+    }
+
+    function getHaunchData(data) {
+        const h = data.haunch || {};
+        const lw = h.leftWall || {};
+        const rw = h.rightWall || {};
+        const mw = Array.isArray(h.middleWalls) ? h.middleWalls : [];
+        const middleWallCount = (data.culvert_count || 1) - 1;
+        const middleWalls = [];
+        for (let i = 0; i < middleWallCount; i++) {
+            const m = mw[i] || {};
+            middleWalls.push({ upper: safeCorner(m.upper), lower: safeCorner(m.lower) });
+        }
+        return {
+            leftWall:  { upper: safeCorner(lw.upper), lower: safeCorner(lw.lower) },
+            middleWalls,
+            rightWall: { upper: safeCorner(rw.upper), lower: safeCorner(rw.lower) }
+        };
+    }
+
+    // 벽체 카드 HTML 생성
+    function createWallCard(title, wallKey, wallData, index) {
+        const idx = index !== undefined ? ` data-index="${index}"` : '';
+        return `<div class="haunch-card">
+            <div class="haunch-card-title">${title}</div>
+            <table class="sub-section-table">
+                <thead><tr><th></th><th>폭</th><th>높이</th></tr></thead>
+                <tbody>
+                    <tr><th>상단</th>
+                        <td><input type="number" value="${wallData.upper.width}" data-wall="${wallKey}"${idx} data-pos="upper" data-dim="width" step="50"></td>
+                        <td><input type="number" value="${wallData.upper.height}" data-wall="${wallKey}"${idx} data-pos="upper" data-dim="height" step="50"></td>
+                    </tr>
+                    <tr><th>하단</th>
+                        <td><input type="number" value="${wallData.lower.width}" data-wall="${wallKey}"${idx} data-pos="lower" data-dim="width" step="50"></td>
+                        <td><input type="number" value="${wallData.lower.height}" data-wall="${wallKey}"${idx} data-pos="lower" data-dim="height" step="50"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+    }
+
+    // 내부헌치 폼
+    function createHaunchForm(data) {
+        const h = getHaunchData(data);
+        const middleWallCount = (data.culvert_count || 1) - 1;
+
+        let cards = createWallCard('좌측벽체', 'leftWall', h.leftWall);
+        for (let i = 0; i < middleWallCount; i++) {
+            cards += createWallCard(`중간벽체${i + 1}`, 'middleWall', h.middleWalls[i], i);
+        }
+        cards += createWallCard('우측벽체', 'rightWall', h.rightWall);
+
+        return `
+            <div class="haunch-cards">${cards}</div>
+            <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm &nbsp;|&nbsp; 좌측벽체 입력 시 우측벽체 자동 동기화</div>`;
+    }
+
+    function registerHaunchEvents() {
+        document.querySelectorAll('.haunch-card input[type="number"]').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const wall = e.target.dataset.wall;
+                const pos = e.target.dataset.pos;
+                const dim = e.target.dataset.dim;
+                const value = parseFloat(e.target.value) || 0;
+                const data = state.getSectionData();
+                const haunch = getHaunchData(data);
+                if (wall === 'middleWall') {
+                    const idx = parseInt(e.target.dataset.index);
+                    haunch.middleWalls[idx][pos][dim] = value;
+                } else {
+                    haunch[wall][pos][dim] = value;
+                }
+                // 좌측벽체 → 우측벽체 자동 동기화
+                if (wall === 'leftWall') {
+                    haunch.rightWall[pos][dim] = value;
+                }
+                state.updateSectionData('haunch', haunch);
+                updateSvg();
+                // 우측벽체 UI도 갱신
+                if (wall === 'leftWall') {
+                    renderSectionTabContent();
+                }
+            });
+        });
+    }
+
+    // 부상방지저판 폼
+    function createAntiFloatForm(data) {
+        const af = data.antiFloat || { use: false, leftExtension: 500, rightExtension: 500, thickness: 300 };
+        return `
+            <div style="margin-bottom: 12px;">
+                <label style="font-size:13px; cursor:pointer;">
+                    <input type="checkbox" id="antifloat-use" ${af.use ? 'checked' : ''}> 부상방지저판 적용
+                </label>
+            </div>
+            <table class="sub-section-table">
+                <thead>
+                    <tr>
+                        <th>좌측 확장폭 (mm)</th>
+                        <th>우측 확장폭 (mm)</th>
+                        <th>두께 (mm)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="number" id="antifloat-left" value="${af.leftExtension}" ${af.use ? '' : 'disabled'}></td>
+                        <td><input type="number" id="antifloat-right" value="${af.rightExtension}" ${af.use ? '' : 'disabled'}></td>
+                        <td><input type="number" id="antifloat-thickness" value="${af.thickness}" ${af.use ? '' : 'disabled'}></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm</div>`;
+    }
+
+    function registerAntiFloatEvents() {
+        const useCheck = document.getElementById('antifloat-use');
+        if (!useCheck) return;
+
+        useCheck.addEventListener('change', (e) => {
+            const data = state.getSectionData();
+            const af = { ...(data.antiFloat || {}) };
+            af.use = e.target.checked;
+            state.updateSectionData('antiFloat', af);
+            renderSectionTabContent();
+            updateSvg();
+        });
+
+        const fields = [
+            { id: 'antifloat-left', key: 'leftExtension' },
+            { id: 'antifloat-right', key: 'rightExtension' },
+            { id: 'antifloat-thickness', key: 'thickness' }
+        ];
+        fields.forEach(({ id, key }) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    const data = state.getSectionData();
+                    const af = { ...(data.antiFloat || {}) };
+                    af[key] = value;
+                    state.updateSectionData('antiFloat', af);
+                    updateSvg();
+                });
+            }
+        });
     }
 
     // 플레이스홀더 폼

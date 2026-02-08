@@ -80,10 +80,123 @@
     margin-bottom: 8px;
 }
 
+/* 단면제원 탭 */
+.section-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 12px;
+}
+
+.section-tab {
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.section-tab:hover {
+    color: var(--text-primary);
+}
+
+.section-tab.active {
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
+}
+
+.section-tab-content {
+    min-height: 80px;
+}
+
+/* 내부헌치 / 부상방지저판 테이블 */
+.sub-section-table {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.sub-section-table th,
+.sub-section-table td {
+    border: 1px solid var(--border-color);
+    padding: 6px 10px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.sub-section-table th {
+    background-color: var(--bg-tertiary);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.sub-section-table td {
+    background-color: var(--bg-secondary);
+}
+
+.sub-section-table input {
+    width: 70px;
+    padding: 4px 6px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: right;
+}
+
+.sub-section-table input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.sub-section-table select {
+    padding: 4px 6px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+/* 헌치 카드 레이아웃 */
+.haunch-cards {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.haunch-card {
+    flex: 0 0 auto;
+    min-width: 150px;
+}
+
+.haunch-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    padding: 6px 8px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+}
+
+.haunch-card .sub-section-table {
+    width: 100%;
+    border-radius: 0 0 4px 4px;
+}
+
 /* 단면제원 테이블 */
 .section-table-container {
     overflow-x: auto;
-    margin-top: 12px;
+    margin-top: 0;
 }
 
 .section-table {
