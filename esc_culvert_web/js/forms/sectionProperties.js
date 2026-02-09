@@ -22,6 +22,7 @@ export function renderSectionPropertiesForm(container) {
         <div class="section-tabs">
             <button class="section-tab ${currentSectionTab === 'section' ? 'active' : ''}" data-tab="section">단면제원</button>
             <button class="section-tab ${currentSectionTab === 'haunch' ? 'active' : ''}" data-tab="haunch">내부헌치</button>
+            <button class="section-tab ${currentSectionTab === 'columngirder' ? 'active' : ''}" data-tab="columngirder">기둥및종거더</button>
             <button class="section-tab ${currentSectionTab === 'antifloat' ? 'active' : ''}" data-tab="antifloat">부상방지저판</button>
         </div>
 
@@ -64,6 +65,10 @@ function renderSectionTabContent() {
         case 'haunch':
             contentEl.innerHTML = createHaunchForm(data);
             registerHaunchEvents();
+            break;
+        case 'columngirder':
+            contentEl.innerHTML = createColumnGirderForm(data);
+            registerColumnGirderEvents();
             break;
         case 'antifloat':
             contentEl.innerHTML = createAntiFloatForm(data);
@@ -237,6 +242,73 @@ function registerHaunchEvents() {
                 renderSectionTabContent();
             }
         });
+    });
+}
+
+// 기둥및종거더 폼 생성
+function createColumnGirderForm(data) {
+    const cg = data.columnGirder || { columnCTC: 3000, columnWidth: 500, upperAdditionalHeight: 0, lowerAdditionalHeight: 0 };
+    const h = getHaunchData(data);
+    const upperHaunchHeight = h.leftWall.upper.height;
+    const lowerHaunchHeight = h.leftWall.lower.height;
+    const UT = data.UT || 0;
+    const LT = data.LT || 0;
+    const upperGirder = UT + upperHaunchHeight + cg.upperAdditionalHeight;
+    const lowerGirder = LT + lowerHaunchHeight + cg.lowerAdditionalHeight;
+
+    return `
+        <div class="haunch-cards">
+            <div class="haunch-card">
+                <div class="haunch-card-title">기둥</div>
+                <table class="sub-section-table">
+                    <tbody>
+                        <tr><th>기둥 CTC</th><td><input type="number" id="cg-columnCTC" value="${cg.columnCTC}" step="100"> mm</td></tr>
+                        <tr><th>기둥 폭</th><td><input type="number" id="cg-columnWidth" value="${cg.columnWidth}" step="50"> mm</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="haunch-card">
+                <div class="haunch-card-title">종거더</div>
+                <table class="sub-section-table">
+                    <tbody>
+                        <tr><th>상부 추가높이</th><td><input type="number" id="cg-upperAdditionalHeight" value="${cg.upperAdditionalHeight}" step="50"> mm</td></tr>
+                        <tr><th>하부 추가높이</th><td><input type="number" id="cg-lowerAdditionalHeight" value="${cg.lowerAdditionalHeight}" step="50"> mm</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="haunch-card">
+                <div class="haunch-card-title">종거더 높이 계산</div>
+                <table class="sub-section-table">
+                    <tbody>
+                        <tr><th>상부</th><td>UT(${UT}) + 헌치높이(${upperHaunchHeight}) + 추가높이(${cg.upperAdditionalHeight}) = <strong>${upperGirder}</strong> mm</td></tr>
+                        <tr><th>하부</th><td>LT(${LT}) + 헌치높이(${lowerHaunchHeight}) + 추가높이(${cg.lowerAdditionalHeight}) = <strong>${lowerGirder}</strong> mm</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm &nbsp;|&nbsp; 헌치높이는 좌측벽체 기준</div>`;
+}
+
+// 기둥및종거더 이벤트 등록
+function registerColumnGirderEvents() {
+    const fields = [
+        { id: 'cg-columnCTC', key: 'columnCTC' },
+        { id: 'cg-columnWidth', key: 'columnWidth' },
+        { id: 'cg-upperAdditionalHeight', key: 'upperAdditionalHeight' },
+        { id: 'cg-lowerAdditionalHeight', key: 'lowerAdditionalHeight' }
+    ];
+    fields.forEach(({ id, key }) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', (e) => {
+                const value = parseFloat(e.target.value) || 0;
+                const data = state.getSectionData();
+                const cg = { ...(data.columnGirder || {}) };
+                cg[key] = value;
+                state.updateSectionData('columnGirder', cg);
+                renderSectionTabContent();
+            });
+        }
     });
 }
 

@@ -141,6 +141,37 @@
     vector-effect: non-scaling-stroke;
 }
 
+/* 기둥 리더선 */
+#culvert-svg .leader-line {
+    fill: none;
+    stroke: #333333;
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .leader-text {
+    fill: #333333;
+    font-family: 'Segoe UI', sans-serif;
+    text-anchor: start;
+}
+
+/* 종거더 점선 */
+#culvert-svg .girder-line {
+    fill: none;
+    stroke: #0066cc;
+    stroke-width: 1.5px;
+    stroke-dasharray: 8 4;
+    vector-effect: non-scaling-stroke;
+}
+
+/* 종거더 X 표시 (빈 공간) */
+#culvert-svg .girder-x-line {
+    fill: none;
+    stroke: #0066cc;
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
 /* 빈 상태 메시지 */
 .viewer-empty {
     position: absolute;

@@ -51,6 +51,12 @@
                 ],
                 rightWall: { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
             },
+            columnGirder: {
+                columnCTC: 3000,
+                columnWidth: 500,
+                upperAdditionalHeight: 0,
+                lowerAdditionalHeight: 0
+            },
             antiFloat: {
                 use: false,
                 leftExtension: 500,
@@ -372,6 +378,8 @@
             this.drawAntiFloatSlab(mainGroup, culvertData, dims);
             this.drawInnerCompartments(mainGroup, culvertData, dims);
             this.drawHaunches(mainGroup, culvertData, dims);
+            this.drawColumnGirders(mainGroup, culvertData, dims);
+            this.drawColumnLeaders(mainGroup, culvertData, dims);
             this.drawGroundLevel(mainGroup, culvertData, dims);
             this.drawGroundwaterLevel(mainGroup, culvertData, dims);
             this.drawDimensions(mainGroup, culvertData, dims);
@@ -523,6 +531,98 @@
                     parent.appendChild(this.createLine(right - lr.width, bottom, right, bottom + lr.height, 'inner-line'));
                 xOffset += B;
                 if (i < data.middle_walls.length) xOffset += data.middle_walls[i].thickness;
+            }
+        }
+
+        drawColumnGirders(parent, data, dims) {
+            if (!data.middle_walls || data.middle_walls.length === 0) return;
+            const cg = data.columnGirder;
+            if (!cg) return;
+            const upperAdd = cg.upperAdditionalHeight || 0;
+            const lowerAdd = cg.lowerAdditionalHeight || 0;
+            if (upperAdd <= 0 && lowerAdd <= 0) return;
+
+            const bottom = dims.LT;
+            const top = dims.LT + dims.H;
+
+            let xOffset = data.WL;
+            for (let i = 0; i < data.culvert_count; i++) {
+                xOffset += data.B[i];
+                if (i < data.middle_walls.length) {
+                    const wall = data.middle_walls[i];
+                    if (wall.type === '기둥') {
+                        const wLeft = xOffset;
+                        const wRight = xOffset + wall.thickness;
+                        const mwHaunch = (data.haunch && data.haunch.middleWalls && data.haunch.middleWalls[i]) || {};
+                        const upperH = (mwHaunch.upper && mwHaunch.upper.height) || 0;
+                        const lowerH = (mwHaunch.lower && mwHaunch.lower.height) || 0;
+
+                        if (upperAdd > 0) {
+                            const yStart = top - upperH;
+                            const yEnd = yStart - upperAdd;
+                            parent.appendChild(this.createLine(wLeft, yStart, wLeft, yEnd, 'girder-line'));
+                            parent.appendChild(this.createLine(wRight, yStart, wRight, yEnd, 'girder-line'));
+                            parent.appendChild(this.createLine(wLeft, yEnd, wRight, yEnd, 'girder-line'));
+                        }
+
+                        if (lowerAdd > 0) {
+                            const yStart = bottom + lowerH;
+                            const yEnd = yStart + lowerAdd;
+                            parent.appendChild(this.createLine(wLeft, yStart, wLeft, yEnd, 'girder-line'));
+                            parent.appendChild(this.createLine(wRight, yStart, wRight, yEnd, 'girder-line'));
+                            parent.appendChild(this.createLine(wLeft, yEnd, wRight, yEnd, 'girder-line'));
+                        }
+
+                        const xTop = upperAdd > 0 ? (top - upperH - upperAdd) : (top - upperH);
+                        const xBottom = lowerAdd > 0 ? (bottom + lowerH + lowerAdd) : (bottom + lowerH);
+                        if (xTop > xBottom) {
+                            parent.appendChild(this.createLine(wLeft, xTop, wRight, xBottom, 'girder-x-line'));
+                            parent.appendChild(this.createLine(wRight, xTop, wLeft, xBottom, 'girder-x-line'));
+                        }
+                    }
+                    xOffset += wall.thickness;
+                }
+            }
+        }
+
+        drawColumnLeaders(parent, data, dims) {
+            if (!data.middle_walls || data.middle_walls.length === 0) return;
+            const cg = data.columnGirder;
+            if (!cg) return;
+
+            const bottom = dims.LT;
+            const top = dims.LT + dims.H;
+            const midY = (bottom + top) / 2;
+            const leaderLen = 800;
+            const textSize = 200;
+            const lineGap = textSize * 1.3;
+
+            let xOffset = data.WL;
+            for (let i = 0; i < data.culvert_count; i++) {
+                xOffset += data.B[i];
+                if (i < data.middle_walls.length) {
+                    const wall = data.middle_walls[i];
+                    if (wall.type === '기둥') {
+                        const wSurface = xOffset + wall.thickness;
+                        const leaderEnd = wSurface + leaderLen;
+
+                        parent.appendChild(this.createLine(wSurface, midY, leaderEnd, midY, 'leader-line'));
+                        parent.appendChild(this.createLine(leaderEnd, midY, leaderEnd, midY + textSize * 0.3, 'leader-line'));
+
+                        const t1 = this.createText(leaderEnd + 50, midY + lineGap * 0.5, `CTC=${cg.columnCTC}`);
+                        t1.setAttribute('class', 'leader-text');
+                        t1.setAttribute('font-size', textSize);
+                        t1.setAttribute('text-anchor', 'start');
+                        parent.appendChild(t1);
+
+                        const t2 = this.createText(leaderEnd + 50, midY - lineGap * 0.5, `W=${cg.columnWidth}`);
+                        t2.setAttribute('class', 'leader-text');
+                        t2.setAttribute('font-size', textSize);
+                        t2.setAttribute('text-anchor', 'start');
+                        parent.appendChild(t2);
+                    }
+                    xOffset += wall.thickness;
+                }
             }
         }
 
@@ -1058,6 +1158,7 @@
             <div class="section-tabs">
                 <button class="section-tab ${currentSectionTab === 'section' ? 'active' : ''}" data-tab="section">단면제원</button>
                 <button class="section-tab ${currentSectionTab === 'haunch' ? 'active' : ''}" data-tab="haunch">내부헌치</button>
+                <button class="section-tab ${currentSectionTab === 'columngirder' ? 'active' : ''}" data-tab="columngirder">기둥및종거더</button>
                 <button class="section-tab ${currentSectionTab === 'antifloat' ? 'active' : ''}" data-tab="antifloat">부상방지저판</button>
             </div>
             <div class="section-tab-content" id="section-tab-content"></div>
@@ -1096,6 +1197,10 @@
             case 'haunch':
                 contentEl.innerHTML = createHaunchForm(data);
                 registerHaunchEvents();
+                break;
+            case 'columngirder':
+                contentEl.innerHTML = createColumnGirderForm(data);
+                registerColumnGirderEvents();
                 break;
             case 'antifloat':
                 contentEl.innerHTML = createAntiFloatForm(data);
@@ -1282,6 +1387,72 @@
         });
     }
 
+    // 기둥및종거더 폼
+    function createColumnGirderForm(data) {
+        const cg = data.columnGirder || { columnCTC: 3000, columnWidth: 500, upperAdditionalHeight: 0, lowerAdditionalHeight: 0 };
+        const h = getHaunchData(data);
+        const upperHaunchHeight = h.leftWall.upper.height;
+        const lowerHaunchHeight = h.leftWall.lower.height;
+        const UT = data.UT || 0;
+        const LT = data.LT || 0;
+        const upperGirder = UT + upperHaunchHeight + cg.upperAdditionalHeight;
+        const lowerGirder = LT + lowerHaunchHeight + cg.lowerAdditionalHeight;
+
+        return `
+            <div class="haunch-cards">
+                <div class="haunch-card">
+                    <div class="haunch-card-title">기둥</div>
+                    <table class="sub-section-table">
+                        <tbody>
+                            <tr><th>기둥 CTC</th><td><input type="number" id="cg-columnCTC" value="${cg.columnCTC}" step="100"> mm</td></tr>
+                            <tr><th>기둥 폭</th><td><input type="number" id="cg-columnWidth" value="${cg.columnWidth}" step="50"> mm</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="haunch-card">
+                    <div class="haunch-card-title">종거더</div>
+                    <table class="sub-section-table">
+                        <tbody>
+                            <tr><th>상부 추가높이</th><td><input type="number" id="cg-upperAdditionalHeight" value="${cg.upperAdditionalHeight}" step="50"> mm</td></tr>
+                            <tr><th>하부 추가높이</th><td><input type="number" id="cg-lowerAdditionalHeight" value="${cg.lowerAdditionalHeight}" step="50"> mm</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="haunch-card">
+                    <div class="haunch-card-title">종거더 높이 계산</div>
+                    <table class="sub-section-table">
+                        <tbody>
+                            <tr><th>상부</th><td>UT(${UT}) + 헌치높이(${upperHaunchHeight}) + 추가높이(${cg.upperAdditionalHeight}) = <strong>${upperGirder}</strong> mm</td></tr>
+                            <tr><th>하부</th><td>LT(${LT}) + 헌치높이(${lowerHaunchHeight}) + 추가높이(${cg.lowerAdditionalHeight}) = <strong>${lowerGirder}</strong> mm</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm &nbsp;|&nbsp; 헌치높이는 좌측벽체 기준</div>`;
+    }
+
+    function registerColumnGirderEvents() {
+        const fields = [
+            { id: 'cg-columnCTC', key: 'columnCTC' },
+            { id: 'cg-columnWidth', key: 'columnWidth' },
+            { id: 'cg-upperAdditionalHeight', key: 'upperAdditionalHeight' },
+            { id: 'cg-lowerAdditionalHeight', key: 'lowerAdditionalHeight' }
+        ];
+        fields.forEach(({ id, key }) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    const data = state.getSectionData();
+                    const cg = { ...(data.columnGirder || {}) };
+                    cg[key] = value;
+                    state.updateSectionData('columnGirder', cg);
+                    renderSectionTabContent();
+                });
+            }
+        });
+    }
+
     // 부상방지저판 폼
     function createAntiFloatForm(data) {
         const af = data.antiFloat || { use: false, leftExtension: 500, rightExtension: 500, thickness: 300 };
@@ -1440,6 +1611,20 @@
         }
     }
 
+    // 칸별 헌치 데이터 가져오기 (SVG 렌더러와 동일 로직)
+    function getDxfCompartmentHaunches(data, i) {
+        const h = getHaunchData(data);
+        const last = data.culvert_count - 1;
+        const leftWall  = (i === 0)    ? h.leftWall  : h.middleWalls[i - 1];
+        const rightWall = (i === last)  ? h.rightWall : h.middleWalls[i];
+        return {
+            ul: leftWall  ? leftWall.upper  : { width: 0, height: 0 },
+            ll: leftWall  ? leftWall.lower  : { width: 0, height: 0 },
+            ur: rightWall ? rightWall.upper : { width: 0, height: 0 },
+            lr: rightWall ? rightWall.lower : { width: 0, height: 0 }
+        };
+    }
+
     function exportDXF() {
         const data = state.getSectionData();
         if (!data || !data.H || data.H <= 0 || !data.B || data.B.length === 0) {
@@ -1448,89 +1633,209 @@
         }
 
         const dims = calculateDims(data);
+        const groundInfo = state.getGroundInfo();
+        const earthCover = groundInfo.earthCoverDepth || 0;
+        const waterLevel = groundInfo.groundwaterLevel || 0;
         const dxf = new DxfWriter();
 
-        // 레이어 설정 (색상: 7=흰색, 3=청록, 1=빨강)
-        dxf.addLayer('OUTER', 7);
-        dxf.addLayer('INNER', 3);
-        dxf.addLayer('DIMENSION', 1);
+        // 부상방지저판 데이터
+        const afData = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
+        const afT = afData ? (afData.thickness || 0) : 0;
+        const afLeftExt = afData ? (afData.leftExtension || 0) : 0;
+        const afRightExt = afData ? (afData.rightExtension || 0) : 0;
 
-        // 외곽선 그리기
+        // 레이어 설정
+        dxf.addLayer('OUTER', 7);    // 흰색
+        dxf.addLayer('INNER', 3);    // 청록
+        dxf.addLayer('DIMENSION', 1); // 빨강
+        dxf.addLayer('GROUND', 3);   // 녹색
+        dxf.addLayer('WATER', 4);    // 청록
+
+        // === 외곽선 ===
         dxf.setLayer('OUTER');
-        dxf.drawPolyline([
-            [0, 0],
-            [dims.totalWidth, 0],
-            [dims.totalWidth, dims.totalHeight],
-            [0, dims.totalHeight],
-            [0, 0]
-        ], true);
+        if (afData && afT > 0) {
+            // 부상방지저판이 있는 경우
+            dxf.drawPolyline([
+                [0, afT], [0, dims.totalHeight],
+                [dims.totalWidth, dims.totalHeight], [dims.totalWidth, afT]
+            ]);
+            dxf.drawLine(0, 0, dims.totalWidth, 0);
+        } else {
+            dxf.drawPolyline([
+                [0, 0], [dims.totalWidth, 0],
+                [dims.totalWidth, dims.totalHeight],
+                [0, dims.totalHeight], [0, 0]
+            ], true);
+        }
 
-        // 내부 공간 그리기
+        // === 내부 공간 (헌치 고려) ===
         dxf.setLayer('INNER');
         let xOffset = data.WL;
         for (let i = 0; i < data.culvert_count; i++) {
             const B = data.B[i];
-            dxf.drawPolyline([
-                [xOffset, dims.LT],
-                [xOffset + B, dims.LT],
-                [xOffset + B, dims.LT + dims.H],
-                [xOffset, dims.LT + dims.H],
-                [xOffset, dims.LT]
-            ], true);
+            const left = xOffset, right = xOffset + B;
+            const bottom = dims.LT, top = dims.LT + dims.H;
+            const { ul, ur, ll, lr } = getDxfCompartmentHaunches(data, i);
+
+            dxf.drawLine(left + ll.width, bottom, right - lr.width, bottom);
+            dxf.drawLine(right, bottom + lr.height, right, top - ur.height);
+            dxf.drawLine(right - ur.width, top, left + ul.width, top);
+            dxf.drawLine(left, top - ul.height, left, bottom + ll.height);
+
             xOffset += B;
-            if (i < data.middle_walls.length) {
-                xOffset += data.middle_walls[i].thickness;
+            if (i < data.middle_walls.length) xOffset += data.middle_walls[i].thickness;
+        }
+
+        // === 헌치 대각선 ===
+        xOffset = data.WL;
+        for (let i = 0; i < data.culvert_count; i++) {
+            const B = data.B[i];
+            const left = xOffset, right = xOffset + B;
+            const bottom = dims.LT, top = dims.LT + dims.H;
+            const { ul, ur, ll, lr } = getDxfCompartmentHaunches(data, i);
+
+            if (ul.width > 0 && ul.height > 0)
+                dxf.drawLine(left, top - ul.height, left + ul.width, top);
+            if (ur.width > 0 && ur.height > 0)
+                dxf.drawLine(right - ur.width, top, right, top - ur.height);
+            if (ll.width > 0 && ll.height > 0)
+                dxf.drawLine(left, bottom + ll.height, left + ll.width, bottom);
+            if (lr.width > 0 && lr.height > 0)
+                dxf.drawLine(right - lr.width, bottom, right, bottom + lr.height);
+
+            xOffset += B;
+            if (i < data.middle_walls.length) xOffset += data.middle_walls[i].thickness;
+        }
+
+        // === 부상방지저판 ===
+        dxf.setLayer('OUTER');
+        if (afData) {
+            if (afLeftExt > 0) {
+                dxf.drawPolyline([
+                    [0, afT], [-afLeftExt, afT],
+                    [-afLeftExt, 0], [0, 0]
+                ]);
+            }
+            if (afRightExt > 0) {
+                dxf.drawPolyline([
+                    [dims.totalWidth, afT], [dims.totalWidth + afRightExt, afT],
+                    [dims.totalWidth + afRightExt, 0], [dims.totalWidth, 0]
+                ]);
             }
         }
 
-        // 치수선 그리기
+        // === 지반선 ===
+        if (earthCover > 0) {
+            dxf.setLayer('GROUND');
+            const groundY = dims.totalHeight + earthCover;
+            const lineLeft = (afData ? -afLeftExt : 0) - 500;
+            const lineRight = (afData ? dims.totalWidth + afRightExt : dims.totalWidth) + 500;
+
+            dxf.drawLine(lineLeft, groundY, lineRight, groundY);
+
+            const hatchSpacing = 400;
+            const hatchSize = 200;
+            for (let x = lineLeft + hatchSpacing / 2; x <= lineRight; x += hatchSpacing) {
+                dxf.drawLine(x, groundY, x - hatchSize, groundY - hatchSize);
+            }
+        }
+
+        // === 지하수위 ===
+        if (waterLevel > 0 && earthCover > 0) {
+            dxf.setLayer('WATER');
+            const groundY = dims.totalHeight + earthCover;
+            const waterY = groundY - waterLevel;
+            const triBase = 400;
+            const triH = 350;
+            const lineLen = 800;
+
+            // 우측
+            dxf.drawLine(dims.totalWidth, waterY, dims.totalWidth + lineLen, waterY);
+            const rCx = dims.totalWidth + lineLen / 2;
+            dxf.drawLine(rCx - triBase / 2, waterY + triH, rCx + triBase / 2, waterY + triH);
+            dxf.drawLine(rCx - triBase / 2, waterY + triH, rCx, waterY);
+            dxf.drawLine(rCx + triBase / 2, waterY + triH, rCx, waterY);
+
+            // 좌측
+            dxf.drawLine(0, waterY, -lineLen, waterY);
+            const lCx = -lineLen / 2;
+            dxf.drawLine(lCx - triBase / 2, waterY + triH, lCx + triBase / 2, waterY + triH);
+            dxf.drawLine(lCx - triBase / 2, waterY + triH, lCx, waterY);
+            dxf.drawLine(lCx + triBase / 2, waterY + triH, lCx, waterY);
+        }
+
+        // === 치수선 (SVG 렌더러와 동일 설정) ===
         dxf.setLayer('DIMENSION');
-        const dimOffset = 500;
-        const dimOffsetFar = 750;
+        const dimOffset = 1000;       // SVG: DIM_OFFSET = 1000
+        const dimOffsetFar = 1500;    // SVG: DIM_OFFSET_FAR = 1500
+        const extLineGap = 500;      // SVG: EXT_LINE_GAP = 500
         const textHeight = 250;
 
-        // 전체 폭 (하단)
-        drawDimH(dxf, 0, dims.totalWidth, 0, -dimOffset, dims.totalWidth.toString(), textHeight);
+        const leftX = afData ? -afLeftExt : 0;
+        const rightX = afData ? dims.totalWidth + afRightExt : dims.totalWidth;
 
-        // 전체 높이 (우측)
-        drawDimV(dxf, dims.totalWidth, 0, dims.totalHeight, dimOffset, dims.totalHeight.toString(), textHeight);
+        // 전체 폭 (하단)
+        drawDimH(dxf, 0, dims.totalWidth, 0, -dimOffset, dims.totalWidth.toString(), textHeight, extLineGap);
+
+        // 전체 높이 (우측, 외측 tier) - extGap = EXT_LINE_GAP + 500
+        drawDimV(dxf, rightX, 0, dims.totalHeight, dimOffsetFar, dims.totalHeight.toString(), textHeight, extLineGap + 500);
 
         // 내공 높이 H (좌측)
-        drawDimV(dxf, 0, dims.LT, dims.LT + dims.H, -dimOffset, dims.H.toString(), textHeight);
+        drawDimV(dxf, leftX, dims.LT, dims.LT + dims.H, -dimOffset, dims.H.toString(), textHeight, extLineGap);
 
         // 각 내공 폭 (상단)
         xOffset = data.WL;
         for (let i = 0; i < data.culvert_count; i++) {
             const B = data.B[i];
-            drawDimH(dxf, xOffset, xOffset + B, dims.totalHeight, dimOffset, B.toString(), textHeight);
+            drawDimH(dxf, xOffset, xOffset + B, dims.totalHeight, dimOffset, B.toString(), textHeight, extLineGap);
             xOffset += B;
             if (i < data.middle_walls.length) {
                 xOffset += data.middle_walls[i].thickness;
             }
         }
 
-        // 상부 슬래브 UT
-        drawDimV(dxf, 0, dims.LT + dims.H, dims.totalHeight, -dimOffsetFar, dims.UT.toString(), textHeight);
+        // 상부 슬래브 UT (좌측)
+        drawDimV(dxf, leftX, dims.LT + dims.H, dims.totalHeight, -dimOffset, dims.UT.toString(), textHeight, extLineGap);
 
-        // 하부 슬래브 LT
-        drawDimV(dxf, 0, 0, dims.LT, -dimOffsetFar, dims.LT.toString(), textHeight);
+        // 하부 슬래브 LT (좌측)
+        drawDimV(dxf, leftX, 0, dims.LT, -dimOffset, dims.LT.toString(), textHeight, extLineGap);
 
-        // 좌측 벽 WL
-        drawDimH(dxf, 0, dims.WL, 0, -dimOffsetFar, dims.WL.toString(), textHeight);
+        // 좌측 벽 WL (상단)
+        drawDimH(dxf, 0, dims.WL, dims.totalHeight, dimOffset, dims.WL.toString(), textHeight, extLineGap);
 
-        // 우측 벽 WR
-        drawDimH(dxf, dims.totalWidth - dims.WR, dims.totalWidth, 0, -dimOffsetFar, dims.WR.toString(), textHeight);
+        // 우측 벽 WR (상단)
+        drawDimH(dxf, dims.totalWidth - dims.WR, dims.totalWidth, dims.totalHeight, dimOffset, dims.WR.toString(), textHeight, extLineGap);
 
-        // 중간벽 치수
+        // 중간벽 치수 (상단)
         if (data.middle_walls && data.middle_walls.length > 0) {
             xOffset = data.WL;
             for (let i = 0; i < data.culvert_count; i++) {
                 xOffset += data.B[i];
                 if (i < data.middle_walls.length) {
                     const wt = data.middle_walls[i].thickness;
-                    drawDimH(dxf, xOffset, xOffset + wt, dims.totalHeight, dimOffsetFar, wt.toString(), textHeight);
+                    drawDimH(dxf, xOffset, xOffset + wt, dims.totalHeight, dimOffset, wt.toString(), textHeight, extLineGap);
                     xOffset += wt;
                 }
+            }
+        }
+
+        // 부상방지저판 치수
+        if (afData) {
+            if (afLeftExt > 0) {
+                drawDimH(dxf, -afLeftExt, 0, 0, -dimOffset, afLeftExt.toString(), textHeight, extLineGap);
+                drawDimV(dxf, -afLeftExt, 0, afT, -dimOffset, afT.toString(), textHeight, extLineGap);
+            }
+        }
+
+        // 토피 치수 (우측, 전체 높이와 같은 tier) - extGap = EXT_LINE_GAP + 500
+        if (earthCover > 0) {
+            const groundY = dims.totalHeight + earthCover;
+            drawDimV(dxf, rightX, dims.totalHeight, groundY, dimOffsetFar, earthCover.toString(), textHeight, extLineGap + 500);
+
+            // 지하수위 깊이 치수 (구조물쪽 가까운 tier)
+            if (waterLevel > 0) {
+                const waterY = groundY - waterLevel;
+                drawDimV(dxf, rightX, waterY, groundY, dimOffset, waterLevel.toString(), textHeight, extLineGap);
             }
         }
 
@@ -1558,24 +1863,34 @@
         };
     }
 
-    // 수평 치수선 그리기
-    function drawDimH(dxf, x1, x2, y, offset, text, textHeight) {
+    // 수평 치수선 그리기 (SVG 렌더러 drawHorizontalDimension과 동일 로직)
+    function drawDimH(dxf, x1, x2, y, offset, text, textHeight, extGap) {
         const dimY = y + offset;
-        dxf.drawLine(x1, y, x1, dimY);
-        dxf.drawLine(x2, y, x2, dimY);
+        const sign = offset > 0 ? 1 : -1;
+        const extStart = y + sign * (extGap || 500);
+        // 보조선 (간격 두고 시작)
+        dxf.drawLine(x1, extStart, x1, dimY);
+        dxf.drawLine(x2, extStart, x2, dimY);
+        // 치수선
         dxf.drawLine(x1, dimY, x2, dimY);
+        // 텍스트
         const textX = (x1 + x2) / 2;
-        const textY = dimY + (offset > 0 ? textHeight * 0.5 : -textHeight * 0.8);
+        const textY = dimY + sign * textHeight * 0.6;
         dxf.drawText(textX, textY, textHeight, 0, text);
     }
 
-    // 수직 치수선 그리기
-    function drawDimV(dxf, x, y1, y2, offset, text, textHeight) {
+    // 수직 치수선 그리기 (SVG 렌더러 drawVerticalDimension과 동일 로직)
+    function drawDimV(dxf, x, y1, y2, offset, text, textHeight, extGap) {
         const dimX = x + offset;
-        dxf.drawLine(x, y1, dimX, y1);
-        dxf.drawLine(x, y2, dimX, y2);
+        const sign = offset > 0 ? 1 : -1;
+        const extStart = x + sign * (extGap || 500);
+        // 보조선 (간격 두고 시작)
+        dxf.drawLine(extStart, y1, dimX, y1);
+        dxf.drawLine(extStart, y2, dimX, y2);
+        // 치수선
         dxf.drawLine(dimX, y1, dimX, y2);
-        const textX = dimX + (offset > 0 ? textHeight * 0.5 : -textHeight * 0.8);
+        // 텍스트
+        const textX = dimX + sign * textHeight * 0.6;
         const textY = (y1 + y2) / 2;
         dxf.drawText(textX, textY, textHeight, 90, text);
     }

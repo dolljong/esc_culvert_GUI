@@ -59,6 +59,12 @@ export class SvgRenderer {
         // 헌치 그리기
         this.drawHaunches(mainGroup, culvertData, dims);
 
+        // 기둥 종거더 그리기
+        this.drawColumnGirders(mainGroup, culvertData, dims);
+
+        // 기둥 리더선 그리기
+        this.drawColumnLeaders(mainGroup, culvertData, dims);
+
         // 부상방지저판 그리기
         this.drawAntiFloatSlab(mainGroup, culvertData, dims);
 
@@ -247,6 +253,107 @@ export class SvgRenderer {
             xOffset += B;
             if (i < data.middle_walls.length) {
                 xOffset += data.middle_walls[i].thickness;
+            }
+        }
+    }
+
+    // 기둥 종거더 그리기
+    drawColumnGirders(parent, data, dims) {
+        if (!data.middle_walls || data.middle_walls.length === 0) return;
+        const cg = data.columnGirder;
+        if (!cg) return;
+        const upperAdd = cg.upperAdditionalHeight || 0;
+        const lowerAdd = cg.lowerAdditionalHeight || 0;
+        if (upperAdd <= 0 && lowerAdd <= 0) return;
+
+        const bottom = dims.LT;
+        const top = dims.LT + dims.H;
+
+        let xOffset = data.WL;
+        for (let i = 0; i < data.culvert_count; i++) {
+            xOffset += data.B[i];
+            if (i < data.middle_walls.length) {
+                const wall = data.middle_walls[i];
+                if (wall.type === '기둥') {
+                    const wLeft = xOffset;
+                    const wRight = xOffset + wall.thickness;
+                    const mwHaunch = (data.haunch && data.haunch.middleWalls && data.haunch.middleWalls[i]) || {};
+                    const upperH = (mwHaunch.upper && mwHaunch.upper.height) || 0;
+                    const lowerH = (mwHaunch.lower && mwHaunch.lower.height) || 0;
+
+                    // 상부 거더 (헌치끝에서 아래로)
+                    if (upperAdd > 0) {
+                        const yStart = top - upperH;
+                        const yEnd = yStart - upperAdd;
+                        parent.appendChild(this.createLine(wLeft, yStart, wLeft, yEnd, 'girder-line'));
+                        parent.appendChild(this.createLine(wRight, yStart, wRight, yEnd, 'girder-line'));
+                        parent.appendChild(this.createLine(wLeft, yEnd, wRight, yEnd, 'girder-line'));
+                    }
+
+                    // 하부 거더 (헌치끝에서 위로)
+                    if (lowerAdd > 0) {
+                        const yStart = bottom + lowerH;
+                        const yEnd = yStart + lowerAdd;
+                        parent.appendChild(this.createLine(wLeft, yStart, wLeft, yEnd, 'girder-line'));
+                        parent.appendChild(this.createLine(wRight, yStart, wRight, yEnd, 'girder-line'));
+                        parent.appendChild(this.createLine(wLeft, yEnd, wRight, yEnd, 'girder-line'));
+                    }
+
+                    // X 표시 (상부 거더 하단 ~ 하부 거더 상단)
+                    const xTop = upperAdd > 0 ? (top - upperH - upperAdd) : (top - upperH);
+                    const xBottom = lowerAdd > 0 ? (bottom + lowerH + lowerAdd) : (bottom + lowerH);
+                    if (xTop > xBottom) {
+                        parent.appendChild(this.createLine(wLeft, xTop, wRight, xBottom, 'girder-x-line'));
+                        parent.appendChild(this.createLine(wRight, xTop, wLeft, xBottom, 'girder-x-line'));
+                    }
+                }
+                xOffset += wall.thickness;
+            }
+        }
+    }
+
+    // 기둥 리더선 그리기
+    drawColumnLeaders(parent, data, dims) {
+        if (!data.middle_walls || data.middle_walls.length === 0) return;
+        const cg = data.columnGirder;
+        if (!cg) return;
+
+        const bottom = dims.LT;
+        const top = dims.LT + dims.H;
+        const midY = (bottom + top) / 2;
+        const leaderLen = 800;
+        const textSize = 200;
+        const lineGap = textSize * 1.3;
+
+        let xOffset = data.WL;
+        for (let i = 0; i < data.culvert_count; i++) {
+            xOffset += data.B[i];
+            if (i < data.middle_walls.length) {
+                const wall = data.middle_walls[i];
+                if (wall.type === '기둥') {
+                    const wSurface = xOffset + wall.thickness;
+                    const leaderEnd = wSurface + leaderLen;
+
+                    // 리더선: 벽체 중심에서 우측으로
+                    parent.appendChild(this.createLine(wSurface, midY, leaderEnd, midY, 'leader-line'));
+                    // 꺾임 (작은 수직 tick)
+                    parent.appendChild(this.createLine(leaderEnd, midY, leaderEnd, midY + textSize * 0.3, 'leader-line'));
+
+                    // CTC 텍스트
+                    const t1 = this.createText(leaderEnd + 50, midY + lineGap * 0.5, `CTC=${cg.columnCTC}`);
+                    t1.setAttribute('class', 'leader-text');
+                    t1.setAttribute('font-size', textSize);
+                    t1.setAttribute('text-anchor', 'start');
+                    parent.appendChild(t1);
+
+                    // W 텍스트
+                    const t2 = this.createText(leaderEnd + 50, midY - lineGap * 0.5, `W=${cg.columnWidth}`);
+                    t2.setAttribute('class', 'leader-text');
+                    t2.setAttribute('font-size', textSize);
+                    t2.setAttribute('text-anchor', 'start');
+                    parent.appendChild(t2);
+                }
+                xOffset += wall.thickness;
             }
         }
     }

@@ -26,6 +26,13 @@ class ESCCulvertTableWidget(QWidget):
             'middleWalls': [],
             'rightWall': {'upper': {'width': 300, 'height': 300}, 'lower': {'width': 300, 'height': 300}}
         }
+        # 기둥및종거더 기본값
+        self.column_girder_data = {
+            'columnCTC': 3000,
+            'columnWidth': 500,
+            'upperAdditionalHeight': 200,
+            'lowerAdditionalHeight': 200
+        }
         # 부상방지저판 기본값
         self.anti_float_data = {
             'use': False,
@@ -45,6 +52,7 @@ class ESCCulvertTableWidget(QWidget):
                 {'type': '연속벽', 'thickness': 600}
             ],
             'haunch': self.haunch_data,
+            'columnGirder': self.column_girder_data,
             'antiFloat': self.anti_float_data
         }
         self.initUI()
@@ -114,11 +122,25 @@ class ESCCulvertTableWidget(QWidget):
 
         self.table.setCurrentCell(next_row, next_col)
 
+    def _save_section_data_to_cache(self):
+        """현재 단면제원 위젯의 값을 캐시에 저장"""
+        try:
+            if not hasattr(self, 'section_table') or not hasattr(self, 'culvert_count_spin'):
+                return
+            # 위젯이 유효한지 확인
+            self.culvert_count_spin.value()
+        except RuntimeError:
+            return
+
+        data = self.get_culvert_section_data()
+        self._cached_culvert_data = data
+
     def update_content(self, item_text):
         self.header_label.setText(item_text)
 
-        # 기존 단면제원 위젯 제거
+        # 기존 단면제원 위젯 제거 (제거 전 캐시 저장)
         if hasattr(self, 'section_widget') and self.section_widget:
+            self._save_section_data_to_cache()
             self.section_widget.setParent(None)
             self.section_widget.deleteLater()
             self.section_widget = None
@@ -216,7 +238,7 @@ class ESCCulvertTableWidget(QWidget):
         top_control.addWidget(QLabel("암거련수"))
         self.culvert_count_spin = QSpinBox()
         self.culvert_count_spin.setRange(1, 10)
-        self.culvert_count_spin.setValue(3)
+        self.culvert_count_spin.setValue(self._cached_culvert_data.get('culvert_count', 3))
         self.culvert_count_spin.setSuffix("련")
         self.culvert_count_spin.valueChanged.connect(self.on_culvert_count_changed)
         top_control.addWidget(self.culvert_count_spin)
@@ -249,6 +271,10 @@ class ESCCulvertTableWidget(QWidget):
         # 내부헌치 탭
         self.haunch_tab = self.create_haunch_tab(self.culvert_count_spin.value())
         self.section_tab_widget.addTab(self.haunch_tab, "내부헌치")
+
+        # 기둥및종거더 탭
+        self.column_girder_tab = self.create_column_girder_tab()
+        self.section_tab_widget.addTab(self.column_girder_tab, "기둥및종거더")
 
         # 부상방지저판 탭
         self.float_tab = self.create_anti_float_tab()
@@ -365,26 +391,41 @@ class ESCCulvertTableWidget(QWidget):
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             section_table.setItem(1, col, item)
 
-        # 3행: 데이터
-        data_values = ["4200", "0"]
+        # 3행: 데이터 (캐시에서 읽기)
+        cached = self._cached_culvert_data
+        cached_B = cached.get('B', [])
+        cached_mw = cached.get('middle_walls', [])
+
+        data_values = [
+            str(int(cached.get('H', 4200))),
+            str(int(cached.get('H4', 0)))
+        ]
 
         # 폭 데이터 추가 (암거련수만큼)
         for i in range(culvert_count):
-            data_values.append("4000")
+            b_val = cached_B[i] if i < len(cached_B) else 4000
+            data_values.append(str(int(b_val)))
 
-        data_values.extend(["600", "800", "600"])
+        data_values.extend([
+            str(int(cached.get('UT', 600))),
+            str(int(cached.get('LT', 800))),
+            str(int(cached.get('WL', 600)))
+        ])
 
         # 중간벽 데이터 추가
         for i in range(middle_wall_count):
-            data_values.append("연속벽")  # 벽체 형식
-            data_values.append("600")     # 두께
+            mw = cached_mw[i] if i < len(cached_mw) else {'type': '연속벽', 'thickness': 600}
+            data_values.append(mw.get('type', '연속벽'))
+            data_values.append(str(int(mw.get('thickness', 600))))
 
-        data_values.append("600")  # 우측벽
+        data_values.append(str(int(cached.get('WR', 600))))
 
         for col, value in enumerate(data_values):
-            if value == "연속벽":
+            if value in ('연속벽', '기둥'):
                 combo = QComboBox()
                 combo.addItems(["연속벽", "기둥"])
+                combo.setCurrentText(value)
+                combo.currentTextChanged.connect(self._on_wall_type_changed)
                 section_table.setCellWidget(2, col, combo)
             else:
                 item = QTableWidgetItem(value)
@@ -413,7 +454,12 @@ class ESCCulvertTableWidget(QWidget):
         """단면제원 테이블 값 변경 시"""
         # 데이터 행(2행)의 값이 변경된 경우에만 시그널 emit
         if item.row() == 2:
+            self._update_girder_height_display()
             self.culvert_data_changed.emit()
+
+    def _on_wall_type_changed(self, text):
+        """중간벽체 타입 변경 시 (연속벽/기둥) 도면 갱신"""
+        self.culvert_data_changed.emit()
 
     def create_haunch_tab(self, culvert_count):
         """내부헌치 탭 내용 생성"""
@@ -509,7 +555,124 @@ class ESCCulvertTableWidget(QWidget):
                 self.section_tab_widget.insertTab(1, self.haunch_tab, "내부헌치")
                 self.section_tab_widget.setCurrentIndex(current_tab_index)
 
+        self._update_girder_height_display()
         self.culvert_data_changed.emit()
+
+    def create_column_girder_tab(self):
+        """기둥및종거더 탭 내용 생성"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # 기둥 그룹
+        column_label = QLabel("기둥")
+        column_label.setFont(QFont("", -1, QFont.Bold))
+        layout.addWidget(column_label)
+
+        column_grid = QGridLayout()
+        column_grid.addWidget(QLabel("기둥 CTC (mm)"), 0, 0)
+        self.cg_ctc_spin = QSpinBox()
+        self.cg_ctc_spin.setRange(0, 100000)
+        self.cg_ctc_spin.setSingleStep(100)
+        self.cg_ctc_spin.setValue(self.column_girder_data['columnCTC'])
+        self.cg_ctc_spin.valueChanged.connect(self._on_column_girder_changed)
+        column_grid.addWidget(self.cg_ctc_spin, 0, 1)
+
+        column_grid.addWidget(QLabel("기둥 폭 (mm)"), 1, 0)
+        self.cg_width_spin = QSpinBox()
+        self.cg_width_spin.setRange(0, 100000)
+        self.cg_width_spin.setSingleStep(50)
+        self.cg_width_spin.setValue(self.column_girder_data['columnWidth'])
+        self.cg_width_spin.valueChanged.connect(self._on_column_girder_changed)
+        column_grid.addWidget(self.cg_width_spin, 1, 1)
+        layout.addLayout(column_grid)
+
+        # 종거더 그룹
+        girder_label = QLabel("종거더")
+        girder_label.setFont(QFont("", -1, QFont.Bold))
+        layout.addWidget(girder_label)
+
+        girder_grid = QGridLayout()
+        girder_grid.addWidget(QLabel("상부 추가높이 (mm)"), 0, 0)
+        self.cg_upper_spin = QSpinBox()
+        self.cg_upper_spin.setRange(0, 100000)
+        self.cg_upper_spin.setSingleStep(50)
+        self.cg_upper_spin.setValue(self.column_girder_data['upperAdditionalHeight'])
+        self.cg_upper_spin.valueChanged.connect(self._on_column_girder_changed)
+        girder_grid.addWidget(self.cg_upper_spin, 0, 1)
+
+        girder_grid.addWidget(QLabel("하부 추가높이 (mm)"), 1, 0)
+        self.cg_lower_spin = QSpinBox()
+        self.cg_lower_spin.setRange(0, 100000)
+        self.cg_lower_spin.setSingleStep(50)
+        self.cg_lower_spin.setValue(self.column_girder_data['lowerAdditionalHeight'])
+        self.cg_lower_spin.valueChanged.connect(self._on_column_girder_changed)
+        girder_grid.addWidget(self.cg_lower_spin, 1, 1)
+        layout.addLayout(girder_grid)
+
+        # 종거더 높이 계산 (읽기전용)
+        calc_label = QLabel("종거더 높이 계산")
+        calc_label.setFont(QFont("", -1, QFont.Bold))
+        layout.addWidget(calc_label)
+
+        calc_grid = QGridLayout()
+        calc_grid.addWidget(QLabel("상부:"), 0, 0)
+        self.cg_upper_result = QLabel()
+        self.cg_upper_result.setStyleSheet("color: #333; font-size: 12px;")
+        calc_grid.addWidget(self.cg_upper_result, 0, 1)
+
+        calc_grid.addWidget(QLabel("하부:"), 1, 0)
+        self.cg_lower_result = QLabel()
+        self.cg_lower_result.setStyleSheet("color: #333; font-size: 12px;")
+        calc_grid.addWidget(self.cg_lower_result, 1, 1)
+        layout.addLayout(calc_grid)
+
+        note = QLabel("* 모든 치수 단위: mm  |  헌치높이는 좌측벽체 기준")
+        note.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(note)
+        layout.addStretch()
+
+        self._update_girder_height_display()
+
+        return tab
+
+    def _on_column_girder_changed(self, value):
+        """기둥및종거더 값 변경 처리"""
+        self.column_girder_data['columnCTC'] = self.cg_ctc_spin.value()
+        self.column_girder_data['columnWidth'] = self.cg_width_spin.value()
+        self.column_girder_data['upperAdditionalHeight'] = self.cg_upper_spin.value()
+        self.column_girder_data['lowerAdditionalHeight'] = self.cg_lower_spin.value()
+        self._update_girder_height_display()
+        self.culvert_data_changed.emit()
+
+    def _update_girder_height_display(self):
+        """종거더 높이 계산 표시 갱신"""
+        if not hasattr(self, 'cg_upper_result'):
+            return
+
+        # UT/LT 값 가져오기
+        try:
+            culvert_count = self.culvert_count_spin.value()
+            slab_start_col = 2 + culvert_count
+            ut = float(self.section_table.item(2, slab_start_col).text() or 0)
+            lt = float(self.section_table.item(2, slab_start_col + 1).text() or 0)
+        except (AttributeError, RuntimeError, ValueError):
+            ut = self._cached_culvert_data.get('UT', 600)
+            lt = self._cached_culvert_data.get('LT', 800)
+
+        upper_haunch = self.haunch_data['leftWall']['upper']['height']
+        lower_haunch = self.haunch_data['leftWall']['lower']['height']
+        upper_add = self.column_girder_data['upperAdditionalHeight']
+        lower_add = self.column_girder_data['lowerAdditionalHeight']
+
+        upper_girder = ut + upper_haunch + upper_add
+        lower_girder = lt + lower_haunch + lower_add
+
+        self.cg_upper_result.setText(
+            f"UT({int(ut)}) + 헌치높이({upper_haunch}) + 추가높이({upper_add}) = {int(upper_girder)} mm")
+        self.cg_lower_result.setText(
+            f"LT({int(lt)}) + 헌치높이({lower_haunch}) + 추가높이({lower_add}) = {int(lower_girder)} mm")
 
     def create_anti_float_tab(self):
         """부상방지저판 탭 내용 생성"""
@@ -712,6 +875,7 @@ class ESCCulvertTableWidget(QWidget):
             'WL': 0, 'WR': 0,
             'middle_walls': [],
             'haunch': self.haunch_data,
+            'columnGirder': self.column_girder_data,
             'antiFloat': self.anti_float_data
         }
 
@@ -751,8 +915,9 @@ class ESCCulvertTableWidget(QWidget):
         return data
 
     def _get_cached_data(self):
-        """캐시된 단면 데이터에 최신 헌치/부상방지저판 반영"""
+        """캐시된 단면 데이터에 최신 헌치/기둥종거더/부상방지저판 반영"""
         self._cached_culvert_data['haunch'] = self.haunch_data
+        self._cached_culvert_data['columnGirder'] = self.column_girder_data
         self._cached_culvert_data['antiFloat'] = self.anti_float_data
         return self._cached_culvert_data
 

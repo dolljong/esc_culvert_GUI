@@ -45,6 +45,12 @@ const defaultState = {
             ],
             rightWall: { upper: { width: 150, height: 150 }, lower: { width: 150, height: 150 } }
         },
+        columnGirder: {
+            columnCTC: 3000,
+            columnWidth: 500,
+            upperAdditionalHeight: 0,
+            lowerAdditionalHeight: 0
+        },
         antiFloat: {
             use: false,
             leftExtension: 500,

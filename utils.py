@@ -134,7 +134,14 @@ def create_cosmetic_pen(color, width=1):
 def draw_line(scene, entity, color):
     line = QGraphicsLineItem(entity.dxf.start[0], -entity.dxf.start[1],
                             entity.dxf.end[0], -entity.dxf.end[1])
-    line.setPen(create_cosmetic_pen(color, 1))
+    linetype = entity.dxf.get('linetype', '')
+    if linetype == 'DASHED':
+        pen = QPen(color, 1)
+        pen.setCosmetic(True)
+        pen.setStyle(Qt.DashLine)
+        line.setPen(pen)
+    else:
+        line.setPen(create_cosmetic_pen(color, 1))
     scene.addItem(line)
 
 def draw_circle(scene, entity, color):
@@ -509,6 +516,97 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         x_offset += B
         if i < len(middle_walls):
             x_offset += middle_walls[i]['thickness']
+
+    # 기둥 종거더 그리기 (점선 + X표시)
+    column_girder = culvert_data.get('columnGirder', None)
+    if column_girder and len(middle_walls) > 0:
+        upper_add = column_girder.get('upperAdditionalHeight', 0)
+        lower_add = column_girder.get('lowerAdditionalHeight', 0)
+        if upper_add > 0 or lower_add > 0:
+            # DASHED 라인타입 등록
+            if 'DASHED' not in doc.linetypes:
+                doc.linetypes.add('DASHED', pattern=[0.5, 0.25, -0.25])
+            bottom = LT
+            top_y = LT + H
+            x_off = WL
+            for i in range(culvert_count):
+                x_off += B_list[i]
+                if i < len(middle_walls):
+                    wall = middle_walls[i]
+                    if wall['type'] == '기둥':
+                        w_left = x_off
+                        w_right = x_off + wall['thickness']
+                        mw_haunch = haunch_data.get('middleWalls', []) if haunch_data else []
+                        mw_h = mw_haunch[i] if i < len(mw_haunch) else {}
+                        upper_h = mw_h.get('upper', {}).get('height', 0)
+                        lower_h = mw_h.get('lower', {}).get('height', 0)
+
+                        # 상부 거더 (헌치끝에서 아래로)
+                        if upper_add > 0:
+                            y_start = top_y - upper_h
+                            y_end = y_start - upper_add
+                            msp.add_line((w_left, y_start), (w_left, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+                            msp.add_line((w_right, y_start), (w_right, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+                            msp.add_line((w_left, y_end), (w_right, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+
+                        # 하부 거더 (헌치끝에서 위로)
+                        if lower_add > 0:
+                            y_start = bottom + lower_h
+                            y_end = y_start + lower_add
+                            msp.add_line((w_left, y_start), (w_left, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+                            msp.add_line((w_right, y_start), (w_right, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+                            msp.add_line((w_left, y_end), (w_right, y_end), dxfattribs={'color': 3, 'linetype': 'DASHED'})
+
+                        # X 표시 (상부 거더 하단 ~ 하부 거더 상단)
+                        x_top = (top_y - upper_h - upper_add) if upper_add > 0 else (top_y - upper_h)
+                        x_bottom = (bottom + lower_h + lower_add) if lower_add > 0 else (bottom + lower_h)
+                        if x_top > x_bottom:
+                            msp.add_line((w_left, x_top), (w_right, x_bottom), dxfattribs={'color': 3})
+                            msp.add_line((w_right, x_top), (w_left, x_bottom), dxfattribs={'color': 3})
+
+                    x_off += wall['thickness']
+
+    # 기둥 리더선 그리기 (CTC, W 표시)
+    if column_girder and len(middle_walls) > 0:
+        mid_y = LT + H / 2
+        leader_len = 800
+        text_height = 150
+        line_gap = text_height * 1.5
+        x_off = WL
+        for i in range(culvert_count):
+            x_off += B_list[i]
+            if i < len(middle_walls):
+                wall = middle_walls[i]
+                if wall['type'] == '기둥':
+                    w_surface = x_off + wall['thickness']
+                    leader_end = w_surface + leader_len
+
+                    # 리더선
+                    msp.add_line((w_surface, mid_y), (leader_end, mid_y), dxfattribs={'color': 7})
+                    # 꺾임 tick
+                    msp.add_line((leader_end, mid_y), (leader_end, mid_y + text_height * 0.3),
+                                 dxfattribs={'color': 7})
+
+                    # CTC 텍스트
+                    msp.add_text(
+                        f"CTC={int(column_girder.get('columnCTC', 0))}",
+                        dxfattribs={
+                            'insert': (leader_end + 50, mid_y + line_gap * 0.1),
+                            'height': text_height,
+                            'color': 7
+                        }
+                    )
+                    # W 텍스트
+                    msp.add_text(
+                        f"W={int(column_girder.get('columnWidth', 0))}",
+                        dxfattribs={
+                            'insert': (leader_end + 50, mid_y - line_gap * 0.9),
+                            'height': text_height,
+                            'color': 7
+                        }
+                    )
+
+                x_off += wall['thickness']
 
     # 부상방지저판 그리기 (암거 저판과 같은 레벨에서 벽체 바깥으로 연장)
     if af_use:
