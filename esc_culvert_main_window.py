@@ -153,7 +153,8 @@ class MainWindow(QMainWindow):
         """단면제원 데이터로 암거 단면 그리기"""
         culvert_data = self.table_widget.get_culvert_section_data()
         if culvert_data:
-            doc = create_culvert_dxf(culvert_data)
+            ground_info = self.table_widget.get_ground_info()
+            doc = create_culvert_dxf(culvert_data, ground_info)
             scene = self.graphics_view.scene()
             display_dxf(doc, scene)
             self.graphics_view.fit_to_scene()

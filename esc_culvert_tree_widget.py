@@ -16,7 +16,7 @@ class ESCCulvertTreeWidget(QTreeWidget):
             item.setText(0, item_text)
             
             if item_text == '설계조건':
-                subitems = ['기본환경', '재료특성', '기타환경']
+                subitems = ['기본환경', '재료특성', '지반정보', '기타환경']
             elif item_text == '단면입력':
                 subitems = ['단면제원', '분점 정의', '하중 정의']
             elif item_text == '배근입력':

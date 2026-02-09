@@ -13,6 +13,40 @@ class ESCCulvertTableWidget(QWidget):
         self.concrete_strength = 30.0
         self.rebar_yield_strength = 400.0
         self.section_data = []
+        # 지반정보 기본값
+        self.ground_info = {
+            'earthCoverDepth': 2000,
+            'groundwaterLevel': 3000,
+            'frictionAngle': 30,
+            'soilUnitWeight': 18.0
+        }
+        # 내부헌치 기본값
+        self.haunch_data = {
+            'leftWall': {'upper': {'width': 300, 'height': 300}, 'lower': {'width': 300, 'height': 300}},
+            'middleWalls': [],
+            'rightWall': {'upper': {'width': 300, 'height': 300}, 'lower': {'width': 300, 'height': 300}}
+        }
+        # 부상방지저판 기본값
+        self.anti_float_data = {
+            'use': False,
+            'leftExtension': 500,
+            'rightExtension': 500,
+            'thickness': 300
+        }
+        # 단면 데이터 캐시 (위젯이 삭제된 후에도 유지)
+        self._cached_culvert_data = {
+            'culvert_count': 3,
+            'H': 4200, 'H4': 0,
+            'B': [4000, 4000, 4000],
+            'UT': 600, 'LT': 800,
+            'WL': 600, 'WR': 600,
+            'middle_walls': [
+                {'type': '연속벽', 'thickness': 600},
+                {'type': '연속벽', 'thickness': 600}
+            ],
+            'haunch': self.haunch_data,
+            'antiFloat': self.anti_float_data
+        }
         self.initUI()
 
     def initUI(self):
@@ -106,6 +140,8 @@ class ESCCulvertTableWidget(QWidget):
             self.setup_section_properties()
         elif "재료특성" in item_text:
             self.setup_material_properties()
+        elif "지반정보" in item_text:
+            self.setup_ground_info()
         else:
             self.table.setRowCount(1)
             self.set_table_item(0, 0, "선택된 메뉴", editable=False)
@@ -210,13 +246,13 @@ class ESCCulvertTableWidget(QWidget):
         self.section_tab = self.create_section_tab(self.culvert_count_spin.value())
         self.section_tab_widget.addTab(self.section_tab, "단면제원")
 
-        # 내부힌지 탭
-        hinge_tab = QWidget()
-        self.section_tab_widget.addTab(hinge_tab, "내부힌지")
+        # 내부헌치 탭
+        self.haunch_tab = self.create_haunch_tab(self.culvert_count_spin.value())
+        self.section_tab_widget.addTab(self.haunch_tab, "내부헌치")
 
         # 부상방지저판 탭
-        float_tab = QWidget()
-        self.section_tab_widget.addTab(float_tab, "부상방지저판")
+        self.float_tab = self.create_anti_float_tab()
+        self.section_tab_widget.addTab(self.float_tab, "부상방지저판")
 
         section_layout.addWidget(self.section_tab_widget)
 
@@ -229,6 +265,19 @@ class ESCCulvertTableWidget(QWidget):
         self.section_tab_widget.removeTab(0)
         self.section_tab = self.create_section_tab(value)
         self.section_tab_widget.insertTab(0, self.section_tab, "단면제원")
+
+        # 내부헌치 탭도 재생성 (중간벽 수 변경 반영)
+        self.section_tab_widget.removeTab(1)
+        self.haunch_tab = self.create_haunch_tab(value)
+        self.section_tab_widget.insertTab(1, self.haunch_tab, "내부헌치")
+
+        # 헌치 중간벽 배열 크기 조정
+        middle_wall_count = value - 1
+        while len(self.haunch_data['middleWalls']) < middle_wall_count:
+            self.haunch_data['middleWalls'].append(
+                {'upper': {'width': 300, 'height': 300}, 'lower': {'width': 300, 'height': 300}})
+        self.haunch_data['middleWalls'] = self.haunch_data['middleWalls'][:middle_wall_count]
+
         self.section_tab_widget.setCurrentIndex(0)
         # 데이터 변경 시그널 emit
         self.culvert_data_changed.emit()
@@ -366,6 +415,163 @@ class ESCCulvertTableWidget(QWidget):
         if item.row() == 2:
             self.culvert_data_changed.emit()
 
+    def create_haunch_tab(self, culvert_count):
+        """내부헌치 탭 내용 생성"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
+
+        middle_wall_count = culvert_count - 1
+
+        # 헌치 중간벽 배열 크기 보장
+        while len(self.haunch_data['middleWalls']) < middle_wall_count:
+            self.haunch_data['middleWalls'].append(
+                {'upper': {'width': 300, 'height': 300}, 'lower': {'width': 300, 'height': 300}})
+
+        # 벽체별 헌치 카드 생성
+        walls = [('좌측벽체', 'leftWall', self.haunch_data['leftWall'], None)]
+        for i in range(middle_wall_count):
+            walls.append((f'중간벽체{i+1}', 'middleWall', self.haunch_data['middleWalls'][i], i))
+        walls.append(('우측벽체', 'rightWall', self.haunch_data['rightWall'], None))
+
+        cards_layout = QHBoxLayout()
+        for title, wall_key, wall_data, idx in walls:
+            card = self._create_haunch_card(title, wall_key, wall_data, idx)
+            cards_layout.addWidget(card)
+
+        layout.addLayout(cards_layout)
+
+        note = QLabel("* 모든 치수 단위: mm  |  좌측벽체 입력 시 우측벽체 자동 동기화")
+        note.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(note)
+        layout.addStretch()
+
+        return tab
+
+    def _create_haunch_card(self, title, wall_key, wall_data, index):
+        """헌치 벽체 카드 위젯 생성"""
+        card = QFrame()
+        card.setFrameStyle(QFrame.Box | QFrame.Raised)
+        card.setStyleSheet("QFrame { border: 1px solid #ccc; border-radius: 4px; padding: 5px; }")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(5, 5, 5, 5)
+
+        title_label = QLabel(title)
+        title_label.setFont(QFont("", -1, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(title_label)
+
+        table = QTableWidget(2, 2)
+        table.setHorizontalHeaderLabels(["폭", "높이"])
+        table.setVerticalHeaderLabels(["상단", "하단"])
+        table.horizontalHeader().setStretchLastSection(True)
+        table.verticalHeader().setDefaultSectionSize(30)
+
+        for row, pos in enumerate(['upper', 'lower']):
+            for col, dim in enumerate(['width', 'height']):
+                spin = QSpinBox()
+                spin.setRange(0, 10000)
+                spin.setSingleStep(50)
+                spin.setValue(wall_data[pos][dim])
+                spin.setProperty('wall_key', wall_key)
+                spin.setProperty('wall_index', index)
+                spin.setProperty('h_pos', pos)
+                spin.setProperty('h_dim', dim)
+                spin.valueChanged.connect(self._on_haunch_changed)
+                table.setCellWidget(row, col, spin)
+
+        table.setFixedHeight(100)
+        card_layout.addWidget(table)
+        return card
+
+    def _on_haunch_changed(self, value):
+        """헌치 값 변경 처리"""
+        sender = self.sender()
+        wall_key = sender.property('wall_key')
+        wall_index = sender.property('wall_index')
+        h_pos = sender.property('h_pos')
+        h_dim = sender.property('h_dim')
+
+        if wall_key == 'middleWall':
+            self.haunch_data['middleWalls'][wall_index][h_pos][h_dim] = value
+        else:
+            self.haunch_data[wall_key][h_pos][h_dim] = value
+
+        # 좌측벽체 → 우측벽체 자동 동기화
+        if wall_key == 'leftWall':
+            self.haunch_data['rightWall'][h_pos][h_dim] = value
+            # 헌치 탭 재생성하여 우측벽체 값 반영
+            if hasattr(self, 'section_tab_widget') and hasattr(self, 'culvert_count_spin'):
+                current_tab_index = self.section_tab_widget.currentIndex()
+                self.section_tab_widget.removeTab(1)
+                self.haunch_tab = self.create_haunch_tab(self.culvert_count_spin.value())
+                self.section_tab_widget.insertTab(1, self.haunch_tab, "내부헌치")
+                self.section_tab_widget.setCurrentIndex(current_tab_index)
+
+        self.culvert_data_changed.emit()
+
+    def create_anti_float_tab(self):
+        """부상방지저판 탭 내용 생성"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        # 적용 체크박스
+        self.anti_float_check = QCheckBox("부상방지저판 적용")
+        self.anti_float_check.setChecked(self.anti_float_data['use'])
+        self.anti_float_check.stateChanged.connect(self._on_anti_float_use_changed)
+        layout.addWidget(self.anti_float_check)
+
+        # 입력 테이블
+        self.anti_float_table = QTableWidget(1, 3)
+        self.anti_float_table.setHorizontalHeaderLabels(["좌측 확장폭 (mm)", "우측 확장폭 (mm)", "두께 (mm)"])
+        self.anti_float_table.verticalHeader().setVisible(False)
+        self.anti_float_table.horizontalHeader().setStretchLastSection(True)
+        self.anti_float_table.setFixedHeight(60)
+
+        fields = [
+            ('leftExtension', self.anti_float_data['leftExtension']),
+            ('rightExtension', self.anti_float_data['rightExtension']),
+            ('thickness', self.anti_float_data['thickness'])
+        ]
+        for col, (key, value) in enumerate(fields):
+            spin = QSpinBox()
+            spin.setRange(0, 10000)
+            spin.setSingleStep(50)
+            spin.setValue(value)
+            spin.setEnabled(self.anti_float_data['use'])
+            spin.setProperty('af_key', key)
+            spin.valueChanged.connect(self._on_anti_float_value_changed)
+            self.anti_float_table.setCellWidget(0, col, spin)
+
+        layout.addWidget(self.anti_float_table)
+
+        note = QLabel("* 모든 치수 단위: mm")
+        note.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(note)
+        layout.addStretch()
+
+        return tab
+
+    def _on_anti_float_use_changed(self, state):
+        """부상방지저판 적용 체크박스 변경"""
+        use = state == Qt.Checked
+        self.anti_float_data['use'] = use
+        for col in range(3):
+            widget = self.anti_float_table.cellWidget(0, col)
+            if widget:
+                widget.setEnabled(use)
+        self.culvert_data_changed.emit()
+
+    def _on_anti_float_value_changed(self, value):
+        """부상방지저판 값 변경 처리"""
+        sender = self.sender()
+        key = sender.property('af_key')
+        self.anti_float_data[key] = value
+        self.culvert_data_changed.emit()
+
     def add_section_row(self, section=None):
         row = self.table.rowCount()
         self.table.insertRow(row)
@@ -433,6 +639,40 @@ class ESCCulvertTableWidget(QWidget):
             spin_box.valueChanged.connect(self.update_material_property)
             self.table.setCellWidget(row, 1, spin_box)
 
+    def setup_ground_info(self):
+        """지반정보 입력 폼 설정"""
+        self.table.setRowCount(4)
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["항목", "내용"])
+
+        items = [
+            ("토피 (mm)", self.ground_info['earthCoverDepth'], 0, 100000, 100, 0, "mm"),
+            ("지하수위 (mm)", self.ground_info['groundwaterLevel'], 0, 100000, 100, 0, "mm"),
+            ("흙의 내부마찰각 (도)", self.ground_info['frictionAngle'], 0, 90, 1, 0, "°"),
+            ("흙의 단위중량 (kN/m³)", self.ground_info['soilUnitWeight'], 0, 100, 0.1, 1, " kN/m³")
+        ]
+
+        for row, (label, value, min_val, max_val, step, decimals, suffix) in enumerate(items):
+            self.set_table_item(row, 0, label, editable=False)
+            spin_box = QDoubleSpinBox()
+            spin_box.setRange(min_val, max_val)
+            spin_box.setValue(value)
+            spin_box.setSingleStep(step)
+            spin_box.setDecimals(decimals)
+            spin_box.setSuffix(suffix)
+            spin_box.valueChanged.connect(self.update_ground_info)
+            self.table.setCellWidget(row, 1, spin_box)
+
+    def update_ground_info(self, value):
+        """지반정보 값 변경 처리"""
+        sender = self.sender()
+        keys = ['earthCoverDepth', 'groundwaterLevel', 'frictionAngle', 'soilUnitWeight']
+        for row, key in enumerate(keys):
+            if sender == self.table.cellWidget(row, 1):
+                self.ground_info[key] = value
+                break
+        self.culvert_data_changed.emit()
+
     def update_material_property(self, value):
         sender = self.sender()
         if sender == self.table.cellWidget(0, 1):
@@ -452,65 +692,70 @@ class ESCCulvertTableWidget(QWidget):
         return self.section_data
 
     def get_culvert_section_data(self):
-        """단면제원 테이블에서 암거 제원 데이터를 가져옴"""
-        if not hasattr(self, 'section_table') or not hasattr(self, 'culvert_count_spin'):
-            return None
+        """단면제원 데이터를 가져옴 (위젯이 삭제된 경우 캐시 반환)"""
+        try:
+            if not hasattr(self, 'section_table') or not hasattr(self, 'culvert_count_spin'):
+                return self._get_cached_data()
+
+            # 위젯이 삭제되었는지 확인
+            self.culvert_count_spin.value()
+        except RuntimeError:
+            return self._get_cached_data()
 
         culvert_count = self.culvert_count_spin.value()
         middle_wall_count = culvert_count - 1
 
         data = {
             'culvert_count': culvert_count,
-            'H': 0,      # 높이
-            'H4': 0,     # H4
-            'B': [],     # 폭 리스트
-            'UT': 0,     # 상부 슬래브 두께
-            'LT': 0,     # 하부 슬래브 두께
-            'WL': 0,     # 좌측벽 두께
-            'WR': 0,     # 우측벽 두께
-            'middle_walls': []  # 중간벽 리스트 [{'type': '연속벽', 'thickness': 600}, ...]
+            'H': 0, 'H4': 0,
+            'B': [], 'UT': 0, 'LT': 0,
+            'WL': 0, 'WR': 0,
+            'middle_walls': [],
+            'haunch': self.haunch_data,
+            'antiFloat': self.anti_float_data
         }
 
         try:
-            # 높이 H, H4
             data['H'] = float(self.section_table.item(2, 0).text() or 0)
             data['H4'] = float(self.section_table.item(2, 1).text() or 0)
 
-            # 폭 B1, B2, ...
             for i in range(culvert_count):
                 col = 2 + i
                 data['B'].append(float(self.section_table.item(2, col).text() or 0))
 
-            # 슬래브 두께
             slab_start_col = 2 + culvert_count
             data['UT'] = float(self.section_table.item(2, slab_start_col).text() or 0)
             data['LT'] = float(self.section_table.item(2, slab_start_col + 1).text() or 0)
 
-            # 좌측벽
             wl_col = slab_start_col + 2
             data['WL'] = float(self.section_table.item(2, wl_col).text() or 0)
 
-            # 중간벽
             middle_start_col = wl_col + 1
             for i in range(middle_wall_count):
                 wall_type_col = middle_start_col + i * 2
                 wall_thickness_col = wall_type_col + 1
-
                 combo = self.section_table.cellWidget(2, wall_type_col)
                 wall_type = combo.currentText() if combo else "연속벽"
                 wall_thickness = float(self.section_table.item(2, wall_thickness_col).text() or 0)
+                data['middle_walls'].append({'type': wall_type, 'thickness': wall_thickness})
 
-                data['middle_walls'].append({
-                    'type': wall_type,
-                    'thickness': wall_thickness
-                })
-
-            # 우측벽
             wr_col = middle_start_col + middle_wall_count * 2
             data['WR'] = float(self.section_table.item(2, wr_col).text() or 0)
 
-        except (ValueError, AttributeError) as e:
+        except (ValueError, AttributeError, RuntimeError) as e:
             print(f"Error getting culvert data: {e}")
-            return None
+            return self._get_cached_data()
 
+        # 캐시 갱신
+        self._cached_culvert_data = data
         return data
+
+    def _get_cached_data(self):
+        """캐시된 단면 데이터에 최신 헌치/부상방지저판 반영"""
+        self._cached_culvert_data['haunch'] = self.haunch_data
+        self._cached_culvert_data['antiFloat'] = self.anti_float_data
+        return self._cached_culvert_data
+
+    def get_ground_info(self):
+        """지반정보 데이터 반환"""
+        return self.ground_info
