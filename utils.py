@@ -5,14 +5,24 @@ from PyQt5.QtGui import QPen, QColor, QFont, QPolygonF,QPainterPath,QFontMetrics
 from PyQt5.QtCore import Qt, QPointF, QRectF
 
 def setup_dimstyle(doc, scale=50):
-    """치수 스타일 설정"""
-    # EZDXF dimstyle이 없으면 생성
+    """치수 스타일 설정 - 화면 표시와 DXF 내보내기 동일 적용"""
     if 'EZDXF' not in doc.dimstyles:
         dimstyle = doc.dimstyles.new('EZDXF')
     else:
         dimstyle = doc.dimstyles.get('EZDXF')
-    dimstyle.dxf.dimscale = scale
-    dimstyle.dxf.dimexo = 10
+    dimstyle.dxf.dimscale = scale     # 전체 스케일 팩터
+    dimstyle.dxf.dimtxt = 2.5         # 텍스트 높이 (실제 = 2.5 * scale)
+    dimstyle.dxf.dimasz = 2.0         # 화살표 크기 (실제 = 2.0 * scale)
+    dimstyle.dxf.dimexo = 4.0         # 보조선 원점 오프셋 (실제 = 4.0 * scale)
+    dimstyle.dxf.dimexe = 2.0         # 보조선 치수선 초과 길이 (실제 = 2.0 * scale)
+    dimstyle.dxf.dimgap = 1.0         # 텍스트-치수선 간격 (실제 = 1.0 * scale)
+    dimstyle.dxf.dimtad = 1           # 텍스트를 치수선 위에 배치
+    dimstyle.dxf.dimtih = 0           # 내부 텍스트 수평 강제 안함
+    dimstyle.dxf.dimtoh = 0           # 외부 텍스트 수평 강제 안함
+    dimstyle.dxf.dimdec = 0           # 소수점 자릿수 (0 = 정수)
+    dimstyle.dxf.dimclrd = 1          # 치수선 색상 (Red)
+    dimstyle.dxf.dimclre = 1          # 보조선 색상 (Red)
+    dimstyle.dxf.dimclrt = 7          # 텍스트 색상 (White)
     return dimstyle
 
 
@@ -258,6 +268,8 @@ def draw_dimension(scene, entity, doc):
     dim_style_table = doc.dimstyles.get(dim_style)
     dimscale = dim_style_table.dxf.dimscale
     dxf_text_size = dim_style_table.dxf.dimtxt * dimscale
+    dimasz = dim_style_table.dxf.dimasz * dimscale
+    dimexe = getattr(dim_style_table.dxf, 'dimexe', 1.25) * dimscale
 
     start_point = entity.dxf.defpoint2
     end_point = entity.dxf.defpoint3
@@ -276,24 +288,43 @@ def draw_dimension(scene, entity, doc):
     ext_start1 = polar(start_point, ext_dir1, dimexo)
     ext_start2 = polar(end_point, ext_dir2, dimexo)
 
-    # Extension lines (원점에서 dimexo만큼 떨어진 곳부터 시작)
+    # 보조선 (dimexe만큼 치수선 너머로 연장)
+    ext_end1 = polar(dimlinepoint1, ext_dir1, dimexe)
+    ext_end2 = polar(dimlinepoint2, ext_dir2, dimexe)
+
     ext_line1 = QGraphicsLineItem(ext_start1[0], -ext_start1[1],
-                                dimlinepoint1[0], -dimlinepoint1[1])
+                                ext_end1[0], -ext_end1[1])
     ext_line1.setPen(create_cosmetic_pen(Qt.red, 1))
     scene.addItem(ext_line1)
 
     ext_line2 = QGraphicsLineItem(ext_start2[0], -ext_start2[1],
-                                dimlinepoint2[0], -dimlinepoint2[1])
+                                ext_end2[0], -ext_end2[1])
     ext_line2.setPen(create_cosmetic_pen(Qt.red, 1))
     scene.addItem(ext_line2)
 
-    # Dimension line
+    # 치수선
     dim_line = QGraphicsLineItem(dimlinepoint1[0], -dimlinepoint1[1],
                                 dimlinepoint2[0], -dimlinepoint2[1])
     dim_line.setPen(create_cosmetic_pen(Qt.red, 1))
     scene.addItem(dim_line)
-    
-    # Dimension text
+
+    # 화살표 (삼각형)
+    if dimasz > 0:
+        for pt, arrow_angle in [(dimlinepoint1, angle), (dimlinepoint2, angle + math.pi)]:
+            tip = pt
+            left = polar(tip, arrow_angle + math.pi + 0.15, dimasz)
+            right = polar(tip, arrow_angle + math.pi - 0.15, dimasz)
+            arrow = QPolygonF([
+                QPointF(tip[0], -tip[1]),
+                QPointF(left[0], -left[1]),
+                QPointF(right[0], -right[1])
+            ])
+            arrow_item = QGraphicsPolygonItem(arrow)
+            arrow_item.setPen(create_cosmetic_pen(Qt.red, 1))
+            arrow_item.setBrush(QColor(Qt.red))
+            scene.addItem(arrow_item)
+
+    # 치수 텍스트
     text_insert_point = find_midpoint(dimlinepoint1, dimlinepoint2)
     dim_item = QGraphicsTextItem(dim_text)
     dim_item.setDefaultTextColor(QColor(Qt.white))
@@ -307,15 +338,6 @@ def draw_dimension(scene, entity, doc):
     dim_item.setPos(text_insert_point[0], -text_insert_point[1])
     dim_item.setRotation(-math.degrees(angle))
     scene.addItem(dim_item)
-    #for check insertpoint
-    circle = QGraphicsEllipseItem(text_insert_point[0] - 2,
-                                -text_insert_point[1] - 2,
-                                4, 4)
-    circle.setPen(create_cosmetic_pen(Qt.red, 1))
-    scene.addItem(circle)
-
-    draw_text_with_data(scene,text_insert_point[0],text_insert_point[1],
-                        height=2.5, ang=math.degrees(angle),text="TEXT",color=2)
 
 
 
