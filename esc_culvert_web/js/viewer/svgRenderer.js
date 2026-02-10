@@ -701,6 +701,180 @@ export class SvgRenderer {
         const data = state.getSectionData();
         this.render(data);
     }
+
+    // ── 부력검토 분할 도형 렌더링 ──
+    renderBuoyancyShapes(culvertData) {
+        this.svg.innerHTML = '';
+        if (!culvertData) culvertData = state.getSectionData();
+        if (!this.validateData(culvertData)) { this.renderPlaceholder(); return; }
+
+        const H = culvertData.H;
+        const B_list = culvertData.B;
+        const UT = culvertData.UT;
+        const LT = culvertData.LT;
+        const WL = culvertData.WL;
+        const WR = culvertData.WR;
+        const middleWalls = culvertData.middle_walls || [];
+        const culvertCount = culvertData.culvert_count || B_list.length;
+        const haunchData = culvertData.haunch || {};
+        const columnGirder = culvertData.columnGirder || {};
+        const antiFloat = culvertData.antiFloat || {};
+
+        const totalInnerWidth = B_list.reduce((a, b) => a + b, 0);
+        const totalMwThickness = middleWalls.reduce((s, mw) => s + (mw.thickness || 0), 0);
+        const totalWidth = WL + totalInnerWidth + totalMwThickness + WR;
+        const totalHeight = LT + H + UT;
+
+        const upperAddH = columnGirder.upperAdditionalHeight || 0;
+        const lowerAddH = columnGirder.lowerAdditionalHeight || 0;
+
+        const leftHaunch = haunchData.leftWall || { upper: { width: 0, height: 0 }, lower: { width: 0, height: 0 } };
+        const rightHaunch = haunchData.rightWall || { upper: { width: 0, height: 0 }, lower: { width: 0, height: 0 } };
+        const middleHaunches = haunchData.middleWalls || [];
+
+        const afUse = antiFloat && antiFloat.use;
+        const afLeft = afUse ? (antiFloat.leftExtension || 0) : 0;
+        const afRight = afUse ? (antiFloat.rightExtension || 0) : 0;
+        const afT = afUse ? (antiFloat.thickness || 0) : 0;
+
+        const mainGroup = this.createGroup('main-group');
+        let shapeNo = 0;
+
+        function textH(w, h) { return Math.max(Math.min(w * 0.13, h * 0.13, 220), 60); }
+
+        const me = this;
+        function addRect(x1, y1, x2, y2, name, cls) {
+            shapeNo++;
+            mainGroup.appendChild(me.createPolyline([[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]], cls));
+            const cx = (x1+x2)/2, cy = (y1+y2)/2;
+            const w = Math.abs(x2-x1), h = Math.abs(y2-y1);
+            const th = textH(w, h);
+            mainGroup.appendChild(me._buoyText(cx, cy + th*0.3, `No.${shapeNo}`, th, 'buoy-num-text'));
+            const nth = th * 0.7;
+            if (name.length * nth < w * 0.95) {
+                mainGroup.appendChild(me._buoyText(cx, cy - th*0.6, name, nth, 'buoy-name-text'));
+            }
+        }
+
+        function addRectDashed(x1, y1, x2, y2, name, cls) {
+            shapeNo++;
+            mainGroup.appendChild(me.createLine(x1,y1,x2,y1, cls + ' buoy-dashed'));
+            mainGroup.appendChild(me.createLine(x2,y1,x2,y2, cls + ' buoy-dashed'));
+            mainGroup.appendChild(me.createLine(x2,y2,x1,y2, cls + ' buoy-dashed'));
+            mainGroup.appendChild(me.createLine(x1,y2,x1,y1, cls + ' buoy-dashed'));
+            const cx = (x1+x2)/2, cy = (y1+y2)/2;
+            const th = textH(Math.abs(x2-x1), Math.abs(y2-y1));
+            mainGroup.appendChild(me._buoyText(cx, cy, `No.${shapeNo}`, th, 'buoy-num-text'));
+        }
+
+        function addTri(p1, p2, p3, cls, label) {
+            if (label) shapeNo++;
+            mainGroup.appendChild(me.createPolyline([p1,p2,p3,p1], cls));
+            if (label) {
+                const cx = (p1[0]+p2[0]+p3[0])/3, cy = (p1[1]+p2[1]+p3[1])/3;
+                const xs = [p1[0],p2[0],p3[0]], ys = [p1[1],p2[1],p3[1]];
+                const th = Math.min(textH(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys)), 130);
+                mainGroup.appendChild(me._buoyText(cx, cy, `No.${shapeNo}`, th, 'buoy-num-text'));
+            }
+        }
+
+        // 전체 윤곽선
+        mainGroup.appendChild(this.createPolyline([[0,0],[totalWidth,0],[totalWidth,totalHeight],[0,totalHeight],[0,0]], 'buoy-outline'));
+        let xOff = WL;
+        for (let i = 0; i < culvertCount; i++) {
+            const B = B_list[i]; const l = xOff, r = xOff + B;
+            mainGroup.appendChild(this.createPolyline([[l,LT],[r,LT],[r,LT+H],[l,LT+H],[l,LT]], 'buoy-outline'));
+            xOff += B;
+            if (i < middleWalls.length) xOff += (middleWalls[i].thickness || 0);
+        }
+
+        // 도형 (report 순서 동일)
+        addRect(0, LT+H, totalWidth, totalHeight, '상부슬래브', 'buoy-rect');
+        addRect(0, 0, totalWidth, LT, '하부슬래브', 'buoy-rect');
+        addRect(0, LT, WL, LT+H, '좌측벽', 'buoy-rect');
+
+        xOff = WL;
+        for (let i = 0; i < culvertCount; i++) {
+            xOff += B_list[i];
+            if (i < middleWalls.length) {
+                const mw = middleWalls[i]; const mwT = mw.thickness || 600;
+                const mwType = mw.type || '연속벽'; const mwH = middleHaunches[i] || {};
+                if (mwType === '연속벽') {
+                    addRect(xOff, LT, xOff+mwT, LT+H, `중간벽${i+1}`, 'buoy-rect');
+                } else {
+                    const mhUH = (mwH.upper&&mwH.upper.height)||0, mhLH = (mwH.lower&&mwH.lower.height)||0;
+                    const ugH = mhUH+upperAddH, lgH = mhLH+lowerAddH;
+                    addRect(xOff, LT+H-ugH, xOff+mwT, LT+H, '상부거더', 'buoy-girder');
+                    addRect(xOff, LT, xOff+mwT, LT+lgH, '하부거더', 'buoy-girder');
+                    const colBot = LT+lgH, colTop = LT+H-ugH;
+                    if (colTop > colBot) addRectDashed(xOff, colBot, xOff+mwT, colTop, `기둥${i+1}`, 'buoy-girder');
+                }
+                xOff += mwT;
+            }
+        }
+
+        addRect(totalWidth-WR, LT, totalWidth, LT+H, '우측벽', 'buoy-rect');
+
+        // 헌치
+        const luW = (leftHaunch.upper&&leftHaunch.upper.width)||0, luH_v = (leftHaunch.upper&&leftHaunch.upper.height)||0;
+        if (luW > 0 && luH_v > 0) addTri([WL,LT+H],[WL+luW,LT+H],[WL,LT+H-luH_v], 'buoy-tri', true);
+        const llW = (leftHaunch.lower&&leftHaunch.lower.width)||0, llH_v = (leftHaunch.lower&&leftHaunch.lower.height)||0;
+        if (llW > 0 && llH_v > 0) addTri([WL,LT],[WL+llW,LT],[WL,LT+llH_v], 'buoy-tri', true);
+
+        xOff = WL;
+        for (let i = 0; i < culvertCount; i++) {
+            xOff += B_list[i];
+            if (i < middleWalls.length) {
+                const mwT = middleWalls[i].thickness || 600; const mwH = middleHaunches[i] || {};
+                const muW = (mwH.upper&&mwH.upper.width)||0, muH = (mwH.upper&&mwH.upper.height)||0;
+                if (muW > 0 && muH > 0) {
+                    addTri([xOff,LT+H],[xOff-muW,LT+H],[xOff,LT+H-muH], 'buoy-tri', true);
+                    const curNo = shapeNo;
+                    addTri([xOff+mwT,LT+H],[xOff+mwT+muW,LT+H],[xOff+mwT,LT+H-muH], 'buoy-tri', false);
+                    const cx2 = (xOff+mwT+xOff+mwT+muW+xOff+mwT)/3, cy2 = (LT+H+LT+H+LT+H-muH)/3;
+                    mainGroup.appendChild(this._buoyText(cx2, cy2, `No.${curNo}`, Math.min(textH(muW,muH),130), 'buoy-num-text'));
+                }
+                const mlW = (mwH.lower&&mwH.lower.width)||0, mlH = (mwH.lower&&mwH.lower.height)||0;
+                if (mlW > 0 && mlH > 0) {
+                    addTri([xOff,LT],[xOff-mlW,LT],[xOff,LT+mlH], 'buoy-tri', true);
+                    const curNo = shapeNo;
+                    addTri([xOff+mwT,LT],[xOff+mwT+mlW,LT],[xOff+mwT,LT+mlH], 'buoy-tri', false);
+                    const cx2 = (xOff+mwT+xOff+mwT+mlW+xOff+mwT)/3, cy2 = (LT+LT+LT+mlH)/3;
+                    mainGroup.appendChild(this._buoyText(cx2, cy2, `No.${curNo}`, Math.min(textH(mlW,mlH),130), 'buoy-num-text'));
+                }
+                xOff += mwT;
+            }
+        }
+
+        const rwLeft = totalWidth - WR;
+        const ruW = (rightHaunch.upper&&rightHaunch.upper.width)||0, ruH_v = (rightHaunch.upper&&rightHaunch.upper.height)||0;
+        if (ruW > 0 && ruH_v > 0) addTri([rwLeft,LT+H],[rwLeft-ruW,LT+H],[rwLeft,LT+H-ruH_v], 'buoy-tri', true);
+        const rlW = (rightHaunch.lower&&rightHaunch.lower.width)||0, rlH_v = (rightHaunch.lower&&rightHaunch.lower.height)||0;
+        if (rlW > 0 && rlH_v > 0) addTri([rwLeft,LT],[rwLeft-rlW,LT],[rwLeft,LT+rlH_v], 'buoy-tri', true);
+
+        if (afUse && afT > 0) addRect(-afLeft, -afT, totalWidth+afRight, 0, '부상방지저판', 'buoy-af');
+
+        this.svg.appendChild(mainGroup);
+        const pad = 500;
+        const minX = (afUse ? -afLeft : 0) - pad;
+        const vW = totalWidth + (afUse ? afLeft+afRight : 0) + pad*2;
+        const vH = totalHeight + (afUse ? afT : 0) + pad*2;
+        this.svg.setAttribute('viewBox', `${minX} ${-totalHeight - pad} ${vW} ${vH}`);
+        mainGroup.setAttribute('transform', 'scale(1, -1)');
+    }
+
+    // 부력 도형용 텍스트 (Y 반전 보정)
+    _buoyText(x, y, text, fontSize, cls) {
+        const textEl = document.createElementNS(SVG_NS, 'text');
+        textEl.setAttribute('x', x);
+        textEl.setAttribute('y', y);
+        textEl.setAttribute('class', cls);
+        textEl.setAttribute('font-size', fontSize);
+        textEl.setAttribute('text-anchor', 'middle');
+        textEl.setAttribute('transform', `scale(1, -1) translate(0, ${-2 * y})`);
+        textEl.textContent = text;
+        return textEl;
+    }
 }
 
 // 싱글톤 인스턴스 생성 함수

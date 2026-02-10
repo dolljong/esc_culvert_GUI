@@ -9,16 +9,18 @@ class ESCCulvertTreeWidget(QTreeWidget):
         self.create_tree_items()
 
     def create_tree_items(self):
-        items = ['프로젝트 정보', '설계조건', '단면입력', '하중입력', '배근 입력', '출력']
+        items = ['프로젝트 정보', '설계조건', '단면입력', '하중입력', '안정검토', '배근 입력', '출력']
 
         for item_text in items:
             item = QTreeWidgetItem(self)
             item.setText(0, item_text)
-            
+
             if item_text == '설계조건':
                 subitems = ['기본환경', '재료특성', '지반정보', '기타환경']
             elif item_text == '단면입력':
                 subitems = ['단면제원', '분점 정의', '하중 정의']
+            elif item_text == '안정검토':
+                subitems = ['부력검토']
             elif item_text == '배근입력':
                 subitems = ['휨철근', '전단철근']
             else:
@@ -51,7 +53,7 @@ class CustomTreeWidget(QWidget):
         header_layout.addWidget(label)
 
         close_button = QPushButton()
-        close_button.setIcon(QIcon("D:\Python\Icon/icons8-close-24.png"))  # 닫기 아이콘 경로를 지정해주세요
+        close_button.setIcon(QIcon(r"D:\Python\Icon/icons8-close-24.png"))  # 닫기 아이콘 경로를 지정해주세요
         close_button.setFixedSize(24, 24)  # 버튼 크기를 아이콘 크기에 맞게 조정
         close_button.setStyleSheet("""
             QPushButton {

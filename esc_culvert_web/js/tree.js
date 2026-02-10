@@ -30,6 +30,12 @@ const treeData = [
         children: null
     },
     {
+        label: '안정검토',
+        children: [
+            { label: '부력검토' }
+        ]
+    },
+    {
         label: '배근 입력',
         children: [
             { label: '휨철근' },

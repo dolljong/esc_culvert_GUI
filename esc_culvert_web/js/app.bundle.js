@@ -249,6 +249,9 @@
             { label: '하중 정의' }
         ]},
         { label: '하중입력', children: null },
+        { label: '안정검토', children: [
+            { label: '부력검토' }
+        ]},
         { label: '배근 입력', children: [
             { label: '휨철근' },
             { label: '전단철근' }
@@ -833,6 +836,240 @@
             let transform = `scale(1, -1) translate(0, ${-2 * y})`;
             if (vertical) transform += ` rotate(-90, ${x}, ${y})`;
             textEl.setAttribute('transform', transform);
+            textEl.textContent = text;
+            return textEl;
+        }
+
+        // ── 부력검토 분할 도형 렌더링 ──
+        renderBuoyancyShapes(culvertData) {
+            this.svg.innerHTML = '';
+            if (!culvertData) culvertData = state.getSectionData();
+            if (!this.validateData(culvertData)) { this.renderPlaceholder(); return; }
+
+            const H = culvertData.H;
+            const B_list = culvertData.B;
+            const UT = culvertData.UT;
+            const LT = culvertData.LT;
+            const WL = culvertData.WL;
+            const WR = culvertData.WR;
+            const middleWalls = culvertData.middle_walls || [];
+            const culvertCount = culvertData.culvert_count || B_list.length;
+            const haunchData = culvertData.haunch || {};
+            const columnGirder = culvertData.columnGirder || {};
+            const antiFloat = culvertData.antiFloat || {};
+
+            const totalInnerWidth = B_list.reduce((a, b) => a + b, 0);
+            const totalMwThickness = middleWalls.reduce((s, mw) => s + (mw.thickness || 0), 0);
+            const totalWidth = WL + totalInnerWidth + totalMwThickness + WR;
+            const totalHeight = LT + H + UT;
+
+            const upperAddH = columnGirder.upperAdditionalHeight || 0;
+            const lowerAddH = columnGirder.lowerAdditionalHeight || 0;
+
+            const leftHaunch = haunchData.leftWall || { upper: { width: 0, height: 0 }, lower: { width: 0, height: 0 } };
+            const rightHaunch = haunchData.rightWall || { upper: { width: 0, height: 0 }, lower: { width: 0, height: 0 } };
+            const middleHaunches = haunchData.middleWalls || [];
+
+            const afUse = antiFloat && antiFloat.use;
+            const afLeft = afUse ? (antiFloat.leftExtension || 0) : 0;
+            const afRight = afUse ? (antiFloat.rightExtension || 0) : 0;
+            const afT = afUse ? (antiFloat.thickness || 0) : 0;
+
+            const mainGroup = this.createGroup('main-group');
+            let shapeNo = 0;
+
+            // 텍스트 높이 계산
+            function textH(w, h) { return Math.max(Math.min(w * 0.13, h * 0.13, 220), 60); }
+
+            // 번호+이름 부착 사각형
+            const me = this;
+            function addRect(x1, y1, x2, y2, name, cls) {
+                shapeNo++;
+                const poly = me.createPolyline([[x1,y1],[x2,y1],[x2,y2],[x1,y2],[x1,y1]], cls);
+                mainGroup.appendChild(poly);
+                const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+                const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+                const th = textH(w, h);
+                // 번호
+                const numT = me._buoyText(cx, cy + th * 0.3, `No.${shapeNo}`, th, 'buoy-num-text');
+                mainGroup.appendChild(numT);
+                // 이름
+                const nth = th * 0.7;
+                if (name.length * nth < w * 0.95) {
+                    const nameT = me._buoyText(cx, cy - th * 0.6, name, nth, 'buoy-name-text');
+                    mainGroup.appendChild(nameT);
+                }
+            }
+
+            // 점선 사각형 (기둥본체)
+            function addRectDashed(x1, y1, x2, y2, name, cls) {
+                shapeNo++;
+                mainGroup.appendChild(me.createLine(x1, y1, x2, y1, cls + ' buoy-dashed'));
+                mainGroup.appendChild(me.createLine(x2, y1, x2, y2, cls + ' buoy-dashed'));
+                mainGroup.appendChild(me.createLine(x2, y2, x1, y2, cls + ' buoy-dashed'));
+                mainGroup.appendChild(me.createLine(x1, y2, x1, y1, cls + ' buoy-dashed'));
+                const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+                const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+                const th = textH(w, h);
+                mainGroup.appendChild(me._buoyText(cx, cy, `No.${shapeNo}`, th, 'buoy-num-text'));
+            }
+
+            // 삼각형
+            function addTri(p1, p2, p3, cls, label) {
+                if (label) shapeNo++;
+                const poly = me.createPolyline([p1, p2, p3, p1], cls);
+                mainGroup.appendChild(poly);
+                if (label) {
+                    const cx = (p1[0] + p2[0] + p3[0]) / 3;
+                    const cy = (p1[1] + p2[1] + p3[1]) / 3;
+                    const xs = [p1[0], p2[0], p3[0]], ys = [p1[1], p2[1], p3[1]];
+                    const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+                    const th = Math.min(textH(w, h), 130);
+                    mainGroup.appendChild(me._buoyText(cx, cy, `No.${shapeNo}`, th, 'buoy-num-text'));
+                }
+            }
+
+            // 전체 윤곽선 (회색)
+            mainGroup.appendChild(this.createPolyline(
+                [[0,0],[totalWidth,0],[totalWidth,totalHeight],[0,totalHeight],[0,0]], 'buoy-outline'));
+
+            // 내공 윤곽선
+            let xOff = WL;
+            for (let i = 0; i < culvertCount; i++) {
+                const B = B_list[i];
+                const l = xOff, r = xOff + B;
+                mainGroup.appendChild(this.createPolyline(
+                    [[l,LT],[r,LT],[r,LT+H],[l,LT+H],[l,LT]], 'buoy-outline'));
+                xOff += B;
+                if (i < middleWalls.length) xOff += (middleWalls[i].thickness || 0);
+            }
+
+            // === 도형 (generate_buoyancy_report 순서 동일) ===
+            // 상부슬래브
+            addRect(0, LT + H, totalWidth, totalHeight, '상부슬래브', 'buoy-rect');
+            // 하부슬래브
+            addRect(0, 0, totalWidth, LT, '하부슬래브', 'buoy-rect');
+            // 좌측벽체
+            addRect(0, LT, WL, LT + H, '좌측벽', 'buoy-rect');
+
+            // 중간벽체
+            xOff = WL;
+            for (let i = 0; i < culvertCount; i++) {
+                xOff += B_list[i];
+                if (i < middleWalls.length) {
+                    const mw = middleWalls[i];
+                    const mwT = mw.thickness || 600;
+                    const mwType = mw.type || '연속벽';
+                    const mwH = middleHaunches[i] || {};
+
+                    if (mwType === '연속벽') {
+                        addRect(xOff, LT, xOff + mwT, LT + H, `중간벽${i+1}`, 'buoy-rect');
+                    } else {
+                        const mhUH = (mwH.upper && mwH.upper.height) || 0;
+                        const mhLH = (mwH.lower && mwH.lower.height) || 0;
+                        const ugH = mhUH + upperAddH;
+                        const lgH = mhLH + lowerAddH;
+                        // 상부종거더
+                        addRect(xOff, LT + H - ugH, xOff + mwT, LT + H, '상부거더', 'buoy-girder');
+                        // 하부종거더
+                        addRect(xOff, LT, xOff + mwT, LT + lgH, '하부거더', 'buoy-girder');
+                        // 기둥본체
+                        const colBot = LT + lgH, colTop = LT + H - ugH;
+                        if (colTop > colBot) {
+                            addRectDashed(xOff, colBot, xOff + mwT, colTop, `기둥${i+1}`, 'buoy-girder');
+                        }
+                    }
+                    xOff += mwT;
+                }
+            }
+
+            // 우측벽체
+            addRect(totalWidth - WR, LT, totalWidth, LT + H, '우측벽', 'buoy-rect');
+
+            // === 헌치 (삼각형) ===
+            // 좌측벽 상부헌치
+            const luW = (leftHaunch.upper && leftHaunch.upper.width) || 0;
+            const luH = (leftHaunch.upper && leftHaunch.upper.height) || 0;
+            if (luW > 0 && luH > 0) addTri([WL, LT+H], [WL+luW, LT+H], [WL, LT+H-luH], 'buoy-tri', true);
+
+            // 좌측벽 하부헌치
+            const llW = (leftHaunch.lower && leftHaunch.lower.width) || 0;
+            const llH = (leftHaunch.lower && leftHaunch.lower.height) || 0;
+            if (llW > 0 && llH > 0) addTri([WL, LT], [WL+llW, LT], [WL, LT+llH], 'buoy-tri', true);
+
+            // 중간벽 헌치 (연속벽/기둥 모두)
+            xOff = WL;
+            for (let i = 0; i < culvertCount; i++) {
+                xOff += B_list[i];
+                if (i < middleWalls.length) {
+                    const mwT = middleWalls[i].thickness || 600;
+                    const mwH = middleHaunches[i] || {};
+
+                    const muW = (mwH.upper && mwH.upper.width) || 0;
+                    const muH = (mwH.upper && mwH.upper.height) || 0;
+                    if (muW > 0 && muH > 0) {
+                        addTri([xOff, LT+H], [xOff-muW, LT+H], [xOff, LT+H-muH], 'buoy-tri', true);
+                        const curNo = shapeNo;
+                        addTri([xOff+mwT, LT+H], [xOff+mwT+muW, LT+H], [xOff+mwT, LT+H-muH], 'buoy-tri', false);
+                        const cx2 = (xOff+mwT + xOff+mwT+muW + xOff+mwT) / 3;
+                        const cy2 = (LT+H + LT+H + LT+H-muH) / 3;
+                        const th2 = Math.min(textH(muW, muH), 130);
+                        mainGroup.appendChild(this._buoyText(cx2, cy2, `No.${curNo}`, th2, 'buoy-num-text'));
+                    }
+
+                    const mlW = (mwH.lower && mwH.lower.width) || 0;
+                    const mlH = (mwH.lower && mwH.lower.height) || 0;
+                    if (mlW > 0 && mlH > 0) {
+                        addTri([xOff, LT], [xOff-mlW, LT], [xOff, LT+mlH], 'buoy-tri', true);
+                        const curNo = shapeNo;
+                        addTri([xOff+mwT, LT], [xOff+mwT+mlW, LT], [xOff+mwT, LT+mlH], 'buoy-tri', false);
+                        const cx2 = (xOff+mwT + xOff+mwT+mlW + xOff+mwT) / 3;
+                        const cy2 = (LT + LT + LT+mlH) / 3;
+                        const th2 = Math.min(textH(mlW, mlH), 130);
+                        mainGroup.appendChild(this._buoyText(cx2, cy2, `No.${curNo}`, th2, 'buoy-num-text'));
+                    }
+
+                    xOff += mwT;
+                }
+            }
+
+            // 우측벽 상부헌치
+            const rwLeft = totalWidth - WR;
+            const ruW = (rightHaunch.upper && rightHaunch.upper.width) || 0;
+            const ruH = (rightHaunch.upper && rightHaunch.upper.height) || 0;
+            if (ruW > 0 && ruH > 0) addTri([rwLeft, LT+H], [rwLeft-ruW, LT+H], [rwLeft, LT+H-ruH], 'buoy-tri', true);
+
+            // 우측벽 하부헌치
+            const rlW = (rightHaunch.lower && rightHaunch.lower.width) || 0;
+            const rlH = (rightHaunch.lower && rightHaunch.lower.height) || 0;
+            if (rlW > 0 && rlH > 0) addTri([rwLeft, LT], [rwLeft-rlW, LT], [rwLeft, LT+rlH], 'buoy-tri', true);
+
+            // 부상방지저판
+            if (afUse && afT > 0) {
+                addRect(-afLeft, -afT, totalWidth + afRight, 0, '부상방지저판', 'buoy-af');
+            }
+
+            this.svg.appendChild(mainGroup);
+
+            // 뷰박스 설정
+            const pad = 500;
+            const minX = (afUse ? -afLeft : 0) - pad;
+            const minY = (afUse ? -afT : 0) - pad;
+            const vW = totalWidth + (afUse ? afLeft + afRight : 0) + pad * 2;
+            const vH = totalHeight + (afUse ? afT : 0) + pad * 2;
+            this.svg.setAttribute('viewBox', `${minX} ${-totalHeight - pad} ${vW} ${vH}`);
+            mainGroup.setAttribute('transform', 'scale(1, -1)');
+        }
+
+        // 부력 도형용 텍스트 (Y 반전 보정)
+        _buoyText(x, y, text, fontSize, cls) {
+            const textEl = document.createElementNS(SVG_NS, 'text');
+            textEl.setAttribute('x', x);
+            textEl.setAttribute('y', y);
+            textEl.setAttribute('class', cls);
+            textEl.setAttribute('font-size', fontSize);
+            textEl.setAttribute('text-anchor', 'middle');
+            textEl.setAttribute('transform', `scale(1, -1) translate(0, ${-2 * y})`);
             textEl.textContent = text;
             return textEl;
         }
@@ -1958,6 +2195,14 @@
         state.on('menuChange', (menu) => {
             updateFormTitle(menu);
             updateFormContent(menu);
+            // 부력검토가 아닌 메뉴로 이동하면 단면도 복원
+            if (menu !== '부력검토') {
+                const renderer = getRenderer();
+                if (renderer) {
+                    renderer.render(state.getSectionData());
+                    if (getZoomPan()) getZoomPan().reset();
+                }
+            }
         });
 
         state.on('sectionDataChange', (data) => {
@@ -1993,8 +2238,415 @@
             case '재료특성': renderMaterialsForm(container); break;
             case '지반정보': renderGroundInfoForm(container); break;
             case '단면제원': renderSectionPropertiesForm(container); break;
+            case '부력검토': renderBuoyancyCheckForm(container); break;
             default: renderPlaceholder(container, menu);
         }
+    }
+
+    // ========================================
+    // BUOYANCY CHECK - 부력 검토
+    // ========================================
+    const GAMMA_C = 24.5;
+    const GAMMA_W = 9.81;
+
+    function bFmt(val) {
+        if (val === Math.floor(val)) return Math.floor(val).toLocaleString();
+        return val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    }
+    function bFmt2(val) {
+        return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function bFmt3(val) {
+        return val.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    }
+
+    function generateBuoyancyReport(sectionData, groundInfo) {
+        const culvertCount = parseInt(sectionData.culvert_count || 3);
+        const H = parseFloat(sectionData.H || 4200);
+        const B_list = (sectionData.B || [4000, 4000, 4000]).map(Number);
+        const UT = parseFloat(sectionData.UT || 600);
+        const LT = parseFloat(sectionData.LT || 800);
+        const WL = parseFloat(sectionData.WL || 600);
+        const WR = parseFloat(sectionData.WR || 600);
+        const middleWalls = sectionData.middle_walls || [];
+        const haunchData = sectionData.haunch || {};
+        const columnGirder = sectionData.columnGirder || {};
+        const antiFloat = sectionData.antiFloat || {};
+
+        const earthCover = parseFloat(groundInfo.earthCoverDepth || 2000);
+        const gwl = parseFloat(groundInfo.groundwaterLevel || 3000);
+        const gammaS = parseFloat(groundInfo.soilUnitWeight || 18.0);
+
+        const ctc = parseFloat(columnGirder.columnCTC || 3000);
+        const colWidth = parseFloat(columnGirder.columnWidth || 500);
+        const upperAddH = parseFloat(columnGirder.upperAdditionalHeight || 200);
+        const lowerAddH = parseFloat(columnGirder.lowerAdditionalHeight || 200);
+
+        const leftHaunch = haunchData.leftWall || { upper: { width: 300, height: 300 }, lower: { width: 300, height: 300 } };
+        const rightHaunch = haunchData.rightWall || { upper: { width: 300, height: 300 }, lower: { width: 300, height: 300 } };
+        const middleHaunches = haunchData.middleWalls || [];
+
+        const afUse = antiFloat.use || false;
+        const afLeftExt = parseFloat(antiFloat.leftExtension || 500);
+        const afRightExt = parseFloat(antiFloat.rightExtension || 500);
+        const afThickness = parseFloat(antiFloat.thickness || 300);
+
+        const totalInnerWidth = B_list.reduce((a, b) => a + b, 0);
+        const totalMwThickness = middleWalls.reduce((s, mw) => s + parseFloat(mw.thickness || 0), 0);
+        const totalWidth = WL + totalInnerWidth + totalMwThickness + WR;
+        const totalHeight = LT + H + UT;
+
+        let bottomWidth, bottomDepth;
+        if (afUse) {
+            bottomWidth = afLeftExt + totalWidth + afRightExt;
+            bottomDepth = earthCover + totalHeight + afThickness;
+        } else {
+            bottomWidth = totalWidth;
+            bottomDepth = earthCover + totalHeight;
+        }
+
+        const lines = [];
+        const add = (text = '') => lines.push(text);
+
+        add('\u2550'.repeat(60));
+        add('         부 력 검 토 (Buoyancy Check)');
+        add('\u2550'.repeat(60));
+        add();
+
+        add('1. 설계 조건');
+        add('\u2500'.repeat(55));
+        add(`   콘크리트 단위중량 (γc)  = ${bFmt2(GAMMA_C)} kN/m\u00B3`);
+        add(`   물의 단위중량 (γw)      = ${bFmt2(GAMMA_W)} kN/m\u00B3`);
+        add(`   흙의 단위중량 (γs)      = ${bFmt2(gammaS)} kN/m\u00B3`);
+        add(`   토피 (Dc)              = ${bFmt(earthCover)} mm`);
+        add(`   지하수위 (GWL)          = ${bFmt(gwl)} mm (지표면 기준)`);
+        add();
+
+        add('2. 구조물 제원');
+        add('\u2500'.repeat(55));
+        const widthParts = [`WL(${bFmt(WL)})`];
+        for (let i = 0; i < B_list.length; i++) {
+            widthParts.push(`B${i + 1}(${bFmt(B_list[i])})`);
+            if (i < middleWalls.length) {
+                widthParts.push(`MW${i + 1}(${bFmt(parseFloat(middleWalls[i].thickness || 0))})`);
+            }
+        }
+        widthParts.push(`WR(${bFmt(WR)})`);
+        add(`   암거련수              = ${culvertCount}련`);
+        add(`   내공높이 (H)          = ${bFmt(H)} mm`);
+        add(`   총 폭 (B_total)      = ${widthParts.join(' + ')}`);
+        add(`                         = ${bFmt(totalWidth)} mm = ${bFmt3(totalWidth / 1000)} m`);
+        add(`   총 높이 (H_total)     = LT(${bFmt(LT)}) + H(${bFmt(H)}) + UT(${bFmt(UT)})`);
+        add(`                         = ${bFmt(totalHeight)} mm = ${bFmt3(totalHeight / 1000)} m`);
+        if (afUse) {
+            add(`   부상방지저판           = 적용`);
+            add(`     좌측확장: ${bFmt(afLeftExt)} mm, 우측확장: ${bFmt(afRightExt)} mm, 두께: ${bFmt(afThickness)} mm`);
+            add(`     하단 총폭 = ${bFmt(afLeftExt)} + ${bFmt(totalWidth)} + ${bFmt(afRightExt)} = ${bFmt(bottomWidth)} mm`);
+        }
+        add();
+
+        add('3. 구조물 자중 산정 (단위 m 당)');
+        add('\u2500'.repeat(55));
+        add('   ※ 구조물 단면을 사각형/삼각형으로 분할하여 산정합니다.');
+        add();
+
+        let shapeNo = 0;
+        let totalWeight = 0;
+
+        function addRect(label, w, h) {
+            shapeNo++;
+            const area = w * h;
+            const weight = GAMMA_C * area / 1e6;
+            totalWeight += weight;
+            add(`   [사각형 No.${shapeNo}] ${label}`);
+            add(`     크기 = ${bFmt(w)} × ${bFmt(h)} mm`);
+            add(`     면적 A = ${bFmt(w)} × ${bFmt(h)} = ${bFmt(area)} mm\u00B2`);
+            add(`     무게 W = γc × A / 10\u2076 = ${bFmt2(GAMMA_C)} × ${bFmt(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+            add();
+        }
+
+        function addTriangle(label, w, h) {
+            if (w <= 0 || h <= 0) return;
+            shapeNo++;
+            const area = 0.5 * w * h;
+            const weight = GAMMA_C * area / 1e6;
+            totalWeight += weight;
+            add(`   [삼각형 No.${shapeNo}] ${label}`);
+            add(`     면적 = 0.5 × ${bFmt(w)} × ${bFmt(h)} = ${bFmt2(area)} mm\u00B2`);
+            add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt2(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+            add();
+        }
+
+        function addTriangleDouble(label, w, h) {
+            if (w <= 0 || h <= 0) return;
+            shapeNo++;
+            const area = 2 * 0.5 * w * h;
+            const weight = GAMMA_C * area / 1e6;
+            totalWeight += weight;
+            add(`   [삼각형 No.${shapeNo}] ${label}`);
+            add(`     면적 = 2 × 0.5 × ${bFmt(w)} × ${bFmt(h)} = ${bFmt2(area)} mm\u00B2`);
+            add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt2(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+            add();
+        }
+
+        // 상부슬래브
+        addRect('상부슬래브', totalWidth, UT);
+        // 하부슬래브
+        addRect('하부슬래브', totalWidth, LT);
+        // 좌측벽체
+        addRect('좌측벽체', WL, H);
+
+        // 중간벽체
+        for (let i = 0; i < middleWalls.length; i++) {
+            const mw = middleWalls[i];
+            const mwThickness = parseFloat(mw.thickness || 600);
+            const mwType = mw.type || '연속벽';
+            const mwHaunch = middleHaunches[i] || {
+                upper: { width: 300, height: 300 },
+                lower: { width: 300, height: 300 }
+            };
+
+            if (mwType === '연속벽') {
+                addRect(`중간벽체${i + 1} (연속벽)`, mwThickness, H);
+            } else {
+                const mhUpperH = parseFloat(mwHaunch.upper.height || 0);
+                const mhLowerH = parseFloat(mwHaunch.lower.height || 0);
+                add(`   ---- 중간벽체${i + 1} (기둥, CTC=${bFmt(ctc)} mm) ----`);
+                add();
+
+                const upperGirderH = mhUpperH + upperAddH;
+                shapeNo++;
+                let area = mwThickness * upperGirderH;
+                let weight = GAMMA_C * area / 1e6;
+                totalWeight += weight;
+                add(`   [사각형 No.${shapeNo}] 중간벽체${i + 1} 상부종거더 (연속)`);
+                add(`     거더높이 = 헌치높이(${bFmt(mhUpperH)}) + 추가높이(${bFmt(upperAddH)}) = ${bFmt(upperGirderH)} mm`);
+                add(`     크기 = ${bFmt(mwThickness)} × ${bFmt(upperGirderH)} mm`);
+                add(`     면적 A = ${bFmt(mwThickness)} × ${bFmt(upperGirderH)} = ${bFmt(area)} mm\u00B2`);
+                add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+                add();
+
+                const lowerGirderH = mhLowerH + lowerAddH;
+                shapeNo++;
+                area = mwThickness * lowerGirderH;
+                weight = GAMMA_C * area / 1e6;
+                totalWeight += weight;
+                add(`   [사각형 No.${shapeNo}] 중간벽체${i + 1} 하부종거더 (연속)`);
+                add(`     거더높이 = 헌치높이(${bFmt(mhLowerH)}) + 추가높이(${bFmt(lowerAddH)}) = ${bFmt(lowerGirderH)} mm`);
+                add(`     크기 = ${bFmt(mwThickness)} × ${bFmt(lowerGirderH)} mm`);
+                add(`     면적 A = ${bFmt(mwThickness)} × ${bFmt(lowerGirderH)} = ${bFmt(area)} mm\u00B2`);
+                add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+                add();
+
+                const colClearH = H - upperGirderH - lowerGirderH;
+                if (colClearH > 0 && ctc > 0) {
+                    shapeNo++;
+                    const areaFull = mwThickness * colClearH;
+                    const areaPerM = areaFull * colWidth / ctc;
+                    weight = GAMMA_C * areaPerM / 1e6;
+                    totalWeight += weight;
+                    add(`   [사각형 No.${shapeNo}] 중간벽체${i + 1} 기둥본체 (CTC 고려)`);
+                    add(`     기둥높이 = H(${bFmt(H)}) - 상부거더(${bFmt(upperGirderH)}) - 하부거더(${bFmt(lowerGirderH)}) = ${bFmt(colClearH)} mm`);
+                    add(`     기둥 단면적 = ${bFmt(mwThickness)} × ${bFmt(colClearH)} = ${bFmt(areaFull)} mm\u00B2`);
+                    add(`     단위m 환산 = ${bFmt(areaFull)} × 기둥폭(${bFmt(colWidth)}) / CTC(${bFmt(ctc)})`);
+                    add(`                = ${bFmt2(areaPerM)} mm\u00B2/m`);
+                    add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt2(areaPerM)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+                    add();
+                }
+            }
+        }
+
+        // 우측벽체
+        addRect('우측벽체', WR, H);
+
+        // 헌치 (삼각형)
+        add('   \u2500\u2500 헌치 (삼각형) \u2500\u2500');
+        add();
+
+        addTriangle('좌측벽 상부헌치', parseFloat(leftHaunch.upper.width || 0), parseFloat(leftHaunch.upper.height || 0));
+        addTriangle('좌측벽 하부헌치', parseFloat(leftHaunch.lower.width || 0), parseFloat(leftHaunch.lower.height || 0));
+
+        // 중간벽 헌치 (연속벽/기둥 모두)
+        for (let i = 0; i < middleWalls.length; i++) {
+            const mwHaunch = middleHaunches[i] || {
+                upper: { width: 300, height: 300 },
+                lower: { width: 300, height: 300 }
+            };
+            addTriangleDouble(`중간벽${i + 1} 상부헌치 (양쪽 2개)`,
+                parseFloat(mwHaunch.upper.width || 0), parseFloat(mwHaunch.upper.height || 0));
+            addTriangleDouble(`중간벽${i + 1} 하부헌치 (양쪽 2개)`,
+                parseFloat(mwHaunch.lower.width || 0), parseFloat(mwHaunch.lower.height || 0));
+        }
+
+        addTriangle('우측벽 상부헌치', parseFloat(rightHaunch.upper.width || 0), parseFloat(rightHaunch.upper.height || 0));
+        addTriangle('우측벽 하부헌치', parseFloat(rightHaunch.lower.width || 0), parseFloat(rightHaunch.lower.height || 0));
+
+        // 부상방지저판
+        if (afUse) {
+            const afTotalWidth = afLeftExt + totalWidth + afRightExt;
+            shapeNo++;
+            const area = afTotalWidth * afThickness;
+            const weight = GAMMA_C * area / 1e6;
+            totalWeight += weight;
+            add(`   [사각형 No.${shapeNo}] 부상방지저판`);
+            add(`     폭 = ${bFmt(afLeftExt)} + ${bFmt(totalWidth)} + ${bFmt(afRightExt)} = ${bFmt(afTotalWidth)} mm`);
+            add(`     크기 = ${bFmt(afTotalWidth)} × ${bFmt(afThickness)} mm`);
+            add(`     면적 A = ${bFmt(afTotalWidth)} × ${bFmt(afThickness)} = ${bFmt(area)} mm\u00B2`);
+            add(`     무게 W = ${bFmt2(GAMMA_C)} × ${bFmt(area)} / 10\u2076 = ${bFmt2(weight)} kN/m`);
+            add();
+        }
+
+        add('   ' + '\u2500'.repeat(51));
+        add(`   구조물 자중 합계 (Wc) = ${bFmt2(totalWeight)} kN/m`);
+        add();
+
+        // 4. 상재토
+        add('4. 상재토 무게 (단위 m 당)');
+        add('\u2500'.repeat(55));
+        const soilArea = totalWidth * earthCover;
+        const soilWeight = gammaS * soilArea / 1e6;
+        add(`   토피고 = ${bFmt(earthCover)} mm = ${bFmt3(earthCover / 1000)} m`);
+        add(`   폭    = ${bFmt(totalWidth)} mm = ${bFmt3(totalWidth / 1000)} m`);
+        add(`   면적  = ${bFmt(totalWidth)} × ${bFmt(earthCover)} = ${bFmt(soilArea)} mm\u00B2`);
+        add(`   무게 (Ws) = γs × A / 10\u2076 = ${bFmt2(gammaS)} × ${bFmt(soilArea)} / 10\u2076 = ${bFmt2(soilWeight)} kN/m`);
+        add();
+
+        // 5. 부력
+        add('5. 부력 산정 (단위 m 당)');
+        add('\u2500'.repeat(55));
+        if (afUse) {
+            add(`   구조물 하단 깊이 = 토피(${bFmt(earthCover)}) + 총높이(${bFmt(totalHeight)}) + 부상방지저판(${bFmt(afThickness)})`);
+        } else {
+            add(`   구조물 하단 깊이 = 토피(${bFmt(earthCover)}) + 총높이(${bFmt(totalHeight)})`);
+        }
+        add(`                     = ${bFmt(bottomDepth)} mm (지표면 기준)`);
+        add(`   지하수위            = ${bFmt(gwl)} mm (지표면 기준)`);
+        add();
+
+        let hw = bottomDepth - gwl;
+        let buoyancy = 0;
+        if (hw <= 0) {
+            hw = 0;
+            add('   \u2192 지하수위가 구조물 하단보다 깊으므로 부력이 발생하지 않음');
+        } else {
+            add(`   수두 높이 (hw) = ${bFmt(bottomDepth)} - ${bFmt(gwl)} = ${bFmt(hw)} mm = ${bFmt3(hw / 1000)} m`);
+            add(`   부력 작용 폭   = ${bFmt(bottomWidth)} mm = ${bFmt3(bottomWidth / 1000)} m`);
+            add();
+            buoyancy = GAMMA_W * (hw / 1000) * (bottomWidth / 1000);
+            add(`   부력 (U) = γw × hw × B_bottom`);
+            add(`            = ${bFmt2(GAMMA_W)} × ${bFmt3(hw / 1000)} × ${bFmt3(bottomWidth / 1000)}`);
+            add(`            = ${bFmt2(buoyancy)} kN/m`);
+        }
+        add();
+
+        // 6. 안전율
+        add('6. 안전율 검토');
+        add('\u2500'.repeat(55));
+        const totalResist = totalWeight + soilWeight;
+        add(`   저항력 (R) = Wc + Ws`);
+        add(`              = ${bFmt2(totalWeight)} + ${bFmt2(soilWeight)}`);
+        add(`              = ${bFmt2(totalResist)} kN/m`);
+        add();
+        add(`   부력 (U)   = ${bFmt2(buoyancy)} kN/m`);
+        add();
+
+        if (buoyancy > 0) {
+            const fs = totalResist / buoyancy;
+            add(`   안전율 (FS) = R / U`);
+            add(`               = ${bFmt2(totalResist)} / ${bFmt2(buoyancy)}`);
+            add(`               = ${bFmt2(fs)}`);
+            add();
+            add(`   필요 안전율 \u2265 1.20`);
+            add();
+            if (fs >= 1.20) {
+                add(`   FS = ${bFmt2(fs)} \u2265 1.20  \u2192  O.K.`);
+            } else {
+                add(`   FS = ${bFmt2(fs)} < 1.20  \u2192  N.G.`);
+            }
+        } else {
+            add('   지하수위가 구조물 하단보다 깊으므로 부력이 작용하지 않습니다.');
+            add('   부력 검토가 필요하지 않습니다. \u2192 O.K.');
+        }
+        add();
+        add('\u2550'.repeat(60));
+        return lines.join('\n');
+    }
+
+    function showBuoyancyCheckModal() {
+        const sectionData = state.getSectionData();
+        const groundInfo = state.getGroundInfo();
+        const report = generateBuoyancyReport(sectionData, groundInfo);
+
+        const existing = document.getElementById('buoyancy-modal');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'buoyancy-modal';
+        overlay.className = 'modal-overlay';
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-container';
+
+        const header = document.createElement('div');
+        header.className = 'modal-header';
+        header.innerHTML = '<span class="modal-title">부력 검토 결과</span><button class="modal-close-btn" title="닫기">\u2715</button>';
+        header.querySelector('.modal-close-btn').addEventListener('click', () => overlay.remove());
+        modal.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'modal-body';
+        const pre = document.createElement('pre');
+        pre.className = 'buoyancy-report';
+        pre.textContent = report;
+        body.appendChild(pre);
+        modal.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'modal-footer';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal-btn';
+        closeBtn.textContent = '닫기';
+        closeBtn.addEventListener('click', () => overlay.remove());
+        footer.appendChild(closeBtn);
+        modal.appendChild(footer);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const onKeydown = (e) => {
+            if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKeydown); }
+        };
+        document.addEventListener('keydown', onKeydown);
+    }
+
+    function renderBuoyancyCheckForm(container) {
+        container.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <p style="margin-bottom: 16px; color: #555;">
+                    부력과 구조물에 작용하는 수직하중을 비교하여 안전율을 검토합니다.
+                </p>
+                <button id="btn-buoyancy-check" style="
+                    padding: 10px 24px;
+                    background-color: #0066cc;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    cursor: pointer;
+                ">부력 검토 실행</button>
+            </div>
+        `;
+        container.querySelector('#btn-buoyancy-check').addEventListener('click', () => {
+            // SVG 뷰어에 분할 도형 그리기
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.renderBuoyancyShapes(state.getSectionData());
+                const zp = getZoomPan();
+                if (zp) zp.reset();
+            }
+            showBuoyancyCheckModal();
+        });
     }
 
     let autoSaveTimeout = null;

@@ -9,6 +9,7 @@ import { renderBasicEnvironmentForm } from './forms/basicEnvironment.js';
 import { renderMaterialsForm } from './forms/materials.js';
 import { renderGroundInfoForm } from './forms/groundInfo.js';
 import { renderSectionPropertiesForm } from './forms/sectionProperties.js';
+import { renderBuoyancyCheckForm } from './forms/buoyancyCheck.js';
 import storage from './utils/storage.js';
 import { exportDXF } from './utils/dxfExport.js';
 
@@ -49,6 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
     state.on('menuChange', (menu) => {
         updateFormTitle(menu);
         updateFormContent(menu);
+        // 부력검토가 아닌 메뉴로 이동하면 단면도 복원
+        if (menu !== '부력검토') {
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.render(state.getSectionData());
+                const zoomPan = getZoomPan();
+                if (zoomPan) zoomPan.reset();
+            }
+        }
     });
 
     state.on('sectionDataChange', (data) => {
@@ -161,6 +171,9 @@ function updateFormContent(menu) {
             break;
         case '단면제원':
             renderSectionPropertiesForm(container);
+            break;
+        case '부력검토':
+            renderBuoyancyCheckForm(container);
             break;
         case '기타환경':
         case '분점 정의':

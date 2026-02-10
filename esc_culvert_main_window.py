@@ -9,6 +9,7 @@ from esc_culvert_tree_widget import CustomTreeWidget
 from esc_culvert_table_widget import ESCCulvertTableWidget
 from esc_culvert_graphics_view import create_graphics_view
 from utils import create_sample_dxf, display_dxf, create_culvert_dxf
+from buoyancy_check import generate_buoyancy_report, BuoyancyCheckDialog, create_buoyancy_shapes_dxf
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -93,6 +94,11 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(f'{menu_name}이(가) 선택되었습니다')
 
+        # 부력검토 메뉴 처리
+        if menu_name == '부력검토':
+            self.show_buoyancy_check()
+            return
+
         # 테이블 위젯 업데이트
         self.table_widget.update_content(full_path)
 
@@ -162,6 +168,27 @@ class MainWindow(QMainWindow):
             scene = self.graphics_view.scene()
             display_dxf(doc, scene)
             self.graphics_view.fit_to_scene()
+
+    def show_buoyancy_check(self):
+        """부력검토 실행: 분할 도형 그리기 + 결과 팝업 표시"""
+        self.table_widget._save_section_data_to_cache()
+        section_data = self.table_widget.get_culvert_section_data()
+        ground_info = self.table_widget.get_ground_info()
+
+        if not section_data:
+            QMessageBox.warning(self, '부력검토', '단면제원 데이터가 없습니다.')
+            return
+
+        # 그림 영역에 분할 도형 표시
+        doc = create_buoyancy_shapes_dxf(section_data)
+        scene = self.graphics_view.scene()
+        display_dxf(doc, scene)
+        self.graphics_view.fit_to_scene()
+
+        # 계산서 팝업
+        report = generate_buoyancy_report(section_data, ground_info)
+        dialog = BuoyancyCheckDialog(report, self)
+        dialog.exec_()
 
     # ========================================
     # 파일 저장/불러오기/DXF 내보내기

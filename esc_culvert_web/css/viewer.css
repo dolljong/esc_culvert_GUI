@@ -172,6 +172,57 @@
     vector-effect: non-scaling-stroke;
 }
 
+/* 부력검토 분할 도형 */
+#culvert-svg .buoy-outline {
+    fill: none;
+    stroke: #888888;
+    stroke-width: 1px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .buoy-rect {
+    fill: rgba(255, 0, 0, 0.05);
+    stroke: #dd0000;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .buoy-tri {
+    fill: rgba(0, 180, 180, 0.08);
+    stroke: #00aaaa;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .buoy-girder {
+    fill: rgba(180, 0, 180, 0.05);
+    stroke: #aa00aa;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .buoy-girder.buoy-dashed {
+    stroke-dasharray: 8 4;
+}
+
+#culvert-svg .buoy-af {
+    fill: rgba(0, 0, 200, 0.05);
+    stroke: #0044cc;
+    stroke-width: 1.5px;
+    vector-effect: non-scaling-stroke;
+}
+
+#culvert-svg .buoy-num-text {
+    fill: #cc8800;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: bold;
+}
+
+#culvert-svg .buoy-name-text {
+    fill: #008844;
+    font-family: 'Segoe UI', sans-serif;
+}
+
 /* 빈 상태 메시지 */
 .viewer-empty {
     position: absolute;
