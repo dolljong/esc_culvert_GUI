@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QPushButton,
                               QHBoxLayout)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
+from utils import setup_dimstyle
 
 GAMMA_C = 24.5   # 콘크리트 단위중량 (kN/m³)
 GAMMA_W = 9.81   # 물의 단위중량 (kN/m³)
@@ -714,6 +715,105 @@ def create_buoyancy_shapes_dxf(section_data):
     if af_use and af_t > 0:
         _add_rect(-af_left, -af_t, total_width + af_right, 0,
                   "부상방지저판", CLR_AF)
+
+    # ══════════════════════════════════════════
+    # 치수선 추가
+    # ══════════════════════════════════════════
+    setup_dimstyle(doc, scale=50)
+
+    dim_offset = 1000
+    left_x = -af_left if af_use else 0
+    right_x = total_width + af_right if af_use else total_width
+
+    # 전체 폭 (하단)
+    msp.add_linear_dim(
+        base=(total_width / 2, -dim_offset),
+        p1=(0, 0), p2=(total_width, 0),
+        dimstyle="EZDXF"
+    ).render()
+
+    # 전체 높이 (우측)
+    msp.add_linear_dim(
+        base=(right_x + dim_offset, total_height / 2),
+        p1=(right_x, 0), p2=(right_x, total_height),
+        angle=90, dimstyle="EZDXF"
+    ).render()
+
+    # 내공 높이 H (좌측)
+    msp.add_linear_dim(
+        base=(left_x - dim_offset, LT + H / 2),
+        p1=(left_x, LT), p2=(left_x, LT + H),
+        angle=90, dimstyle="EZDXF"
+    ).render()
+
+    # 상부 슬래브 UT (좌측)
+    msp.add_linear_dim(
+        base=(left_x - dim_offset, LT + H + UT / 2),
+        p1=(left_x, LT + H), p2=(left_x, total_height),
+        angle=90, dimstyle="EZDXF"
+    ).render()
+
+    # 하부 슬래브 LT (좌측)
+    msp.add_linear_dim(
+        base=(left_x - dim_offset, LT / 2),
+        p1=(left_x, 0), p2=(left_x, LT),
+        angle=90, dimstyle="EZDXF"
+    ).render()
+
+    # 각 내공 폭 (상단)
+    x_off = WL
+    for i in range(culvert_count):
+        B = B_list[i]
+        msp.add_linear_dim(
+            base=(x_off + B / 2, total_height + dim_offset),
+            p1=(x_off, total_height), p2=(x_off + B, total_height),
+            dimstyle="EZDXF"
+        ).render()
+        x_off += B
+        if i < len(middle_walls):
+            x_off += float(middle_walls[i].get('thickness', 0))
+
+    # 좌측벽 WL (상단)
+    msp.add_linear_dim(
+        base=(WL / 2, total_height + dim_offset),
+        p1=(0, total_height), p2=(WL, total_height),
+        dimstyle="EZDXF"
+    ).render()
+
+    # 우측벽 WR (상단)
+    msp.add_linear_dim(
+        base=(total_width - WR / 2, total_height + dim_offset),
+        p1=(total_width - WR, total_height), p2=(total_width, total_height),
+        dimstyle="EZDXF"
+    ).render()
+
+    # 중간벽 치수 (상단)
+    if middle_walls:
+        x_off = WL
+        for i in range(culvert_count):
+            x_off += B_list[i]
+            if i < len(middle_walls):
+                mw_t = float(middle_walls[i].get('thickness', 0))
+                msp.add_linear_dim(
+                    base=(x_off + mw_t / 2, total_height + dim_offset),
+                    p1=(x_off, total_height), p2=(x_off + mw_t, total_height),
+                    dimstyle="EZDXF"
+                ).render()
+                x_off += mw_t
+
+    # 부상방지저판 치수
+    if af_use and af_left > 0:
+        msp.add_linear_dim(
+            base=(-af_left / 2, -dim_offset),
+            p1=(-af_left, 0), p2=(0, 0),
+            dimstyle="EZDXF"
+        ).render()
+    if af_use and af_t > 0:
+        msp.add_linear_dim(
+            base=(-af_left - dim_offset, -af_t / 2),
+            p1=(-af_left, -af_t), p2=(-af_left, 0),
+            angle=90, dimstyle="EZDXF"
+        ).render()
 
     return doc
 

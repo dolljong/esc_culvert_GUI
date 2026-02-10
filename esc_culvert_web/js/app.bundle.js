@@ -1049,12 +1049,61 @@
                 addRect(-afLeft, -afT, totalWidth + afRight, 0, '부상방지저판', 'buoy-af');
             }
 
+            // ── 치수선 ──
+            const dimGroup = this.createGroup('dimensions');
+            const dimOff = 1000;
+            const leftDimX = afUse ? -afLeft : 0;
+            const rightDimX = afUse ? totalWidth + afRight : totalWidth;
+
+            // 전체 폭 (하단)
+            this.drawHorizontalDimension(dimGroup, 0, totalWidth, 0, -dimOff, totalWidth.toString());
+            // 전체 높이 (우측)
+            this.drawVerticalDimension(dimGroup, rightDimX, 0, totalHeight, dimOff, totalHeight.toString());
+            // 내공 높이 H (좌측)
+            this.drawVerticalDimension(dimGroup, leftDimX, LT, LT + H, -dimOff, H.toString());
+            // 상부 슬래브 UT (좌측)
+            this.drawVerticalDimension(dimGroup, leftDimX, LT + H, totalHeight, -dimOff, UT.toString());
+            // 하부 슬래브 LT (좌측)
+            this.drawVerticalDimension(dimGroup, leftDimX, 0, LT, -dimOff, LT.toString());
+
+            // 각 내공 폭 (상단)
+            let dimXOff = WL;
+            for (let i = 0; i < culvertCount; i++) {
+                const B = B_list[i];
+                this.drawHorizontalDimension(dimGroup, dimXOff, dimXOff + B, totalHeight, dimOff, B.toString());
+                dimXOff += B;
+                if (i < middleWalls.length) dimXOff += (middleWalls[i].thickness || 0);
+            }
+            // 좌측벽 WL (상단)
+            this.drawHorizontalDimension(dimGroup, 0, WL, totalHeight, dimOff, WL.toString());
+            // 우측벽 WR (상단)
+            this.drawHorizontalDimension(dimGroup, totalWidth - WR, totalWidth, totalHeight, dimOff, WR.toString());
+            // 중간벽 치수 (상단)
+            if (middleWalls.length > 0) {
+                dimXOff = WL;
+                for (let i = 0; i < culvertCount; i++) {
+                    dimXOff += B_list[i];
+                    if (i < middleWalls.length) {
+                        const wt = middleWalls[i].thickness || 0;
+                        this.drawHorizontalDimension(dimGroup, dimXOff, dimXOff + wt, totalHeight, dimOff, wt.toString());
+                        dimXOff += wt;
+                    }
+                }
+            }
+            // 부상방지저판 치수
+            if (afUse && afLeft > 0) {
+                this.drawHorizontalDimension(dimGroup, -afLeft, 0, 0, -dimOff, afLeft.toString());
+            }
+            if (afUse && afT > 0) {
+                this.drawVerticalDimension(dimGroup, -afLeft, -afT, 0, -dimOff, afT.toString());
+            }
+            mainGroup.appendChild(dimGroup);
+
             this.svg.appendChild(mainGroup);
 
-            // 뷰박스 설정
-            const pad = 500;
+            // 뷰박스 설정 (치수선 여유 포함)
+            const pad = 1800;
             const minX = (afUse ? -afLeft : 0) - pad;
-            const minY = (afUse ? -afT : 0) - pad;
             const vW = totalWidth + (afUse ? afLeft + afRight : 0) + pad * 2;
             const vH = totalHeight + (afUse ? afT : 0) + pad * 2;
             this.svg.setAttribute('viewBox', `${minX} ${-totalHeight - pad} ${vW} ${vH}`);

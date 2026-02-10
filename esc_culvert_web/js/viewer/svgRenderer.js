@@ -854,8 +854,44 @@ export class SvgRenderer {
 
         if (afUse && afT > 0) addRect(-afLeft, -afT, totalWidth+afRight, 0, '부상방지저판', 'buoy-af');
 
+        // ── 치수선 ──
+        const dimGroup = this.createGroup('dimensions');
+        const dimOff = 1000;
+        const leftDimX = afUse ? -afLeft : 0;
+        const rightDimX = afUse ? totalWidth + afRight : totalWidth;
+
+        this.drawHorizontalDimension(dimGroup, 0, totalWidth, 0, -dimOff, totalWidth.toString());
+        this.drawVerticalDimension(dimGroup, rightDimX, 0, totalHeight, dimOff, totalHeight.toString());
+        this.drawVerticalDimension(dimGroup, leftDimX, LT, LT+H, -dimOff, H.toString());
+        this.drawVerticalDimension(dimGroup, leftDimX, LT+H, totalHeight, -dimOff, UT.toString());
+        this.drawVerticalDimension(dimGroup, leftDimX, 0, LT, -dimOff, LT.toString());
+
+        let dimXOff = WL;
+        for (let i = 0; i < culvertCount; i++) {
+            const B = B_list[i];
+            this.drawHorizontalDimension(dimGroup, dimXOff, dimXOff+B, totalHeight, dimOff, B.toString());
+            dimXOff += B;
+            if (i < middleWalls.length) dimXOff += (middleWalls[i].thickness || 0);
+        }
+        this.drawHorizontalDimension(dimGroup, 0, WL, totalHeight, dimOff, WL.toString());
+        this.drawHorizontalDimension(dimGroup, totalWidth-WR, totalWidth, totalHeight, dimOff, WR.toString());
+        if (middleWalls.length > 0) {
+            dimXOff = WL;
+            for (let i = 0; i < culvertCount; i++) {
+                dimXOff += B_list[i];
+                if (i < middleWalls.length) {
+                    const wt = middleWalls[i].thickness || 0;
+                    this.drawHorizontalDimension(dimGroup, dimXOff, dimXOff+wt, totalHeight, dimOff, wt.toString());
+                    dimXOff += wt;
+                }
+            }
+        }
+        if (afUse && afLeft > 0) this.drawHorizontalDimension(dimGroup, -afLeft, 0, 0, -dimOff, afLeft.toString());
+        if (afUse && afT > 0) this.drawVerticalDimension(dimGroup, -afLeft, -afT, 0, -dimOff, afT.toString());
+        mainGroup.appendChild(dimGroup);
+
         this.svg.appendChild(mainGroup);
-        const pad = 500;
+        const pad = 1800;
         const minX = (afUse ? -afLeft : 0) - pad;
         const vW = totalWidth + (afUse ? afLeft+afRight : 0) + pad*2;
         const vH = totalHeight + (afUse ? afT : 0) + pad*2;
