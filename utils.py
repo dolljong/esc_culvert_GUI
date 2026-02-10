@@ -684,7 +684,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p1=(0, 0),
         p2=(total_width, 0),
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 전체 높이 치수선 (우측, 외측 tier)
     msp.add_linear_dim(
@@ -693,7 +693,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p2=(right_x_far, total_height),
         angle=90,
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 내공 높이 H (좌측)
     msp.add_linear_dim(
@@ -702,7 +702,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p2=(left_x, LT + H),
         angle=90,
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 각 내공 폭 치수선 (상단)
     x_offset = WL
@@ -713,7 +713,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
             p1=(x_offset, total_height),
             p2=(x_offset + B, total_height),
             dimstyle="EZDXF"
-        )
+        ).render()
         x_offset += B
         if i < len(middle_walls):
             x_offset += middle_walls[i]['thickness']
@@ -725,7 +725,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p2=(left_x, total_height),
         angle=90,
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 하부 슬래브 LT (좌측)
     msp.add_linear_dim(
@@ -734,7 +734,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p2=(left_x, LT),
         angle=90,
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 좌측벽 WL (상단)
     msp.add_linear_dim(
@@ -742,7 +742,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p1=(0, total_height),
         p2=(WL, total_height),
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 우측벽 WR (상단)
     msp.add_linear_dim(
@@ -750,7 +750,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
         p1=(total_width - WR, total_height),
         p2=(total_width, total_height),
         dimstyle="EZDXF"
-    )
+    ).render()
 
     # 중간벽 치수 (상단)
     if middle_walls:
@@ -764,7 +764,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
                     p1=(x_offset, total_height),
                     p2=(x_offset + wall_thickness, total_height),
                     dimstyle="EZDXF"
-                )
+                ).render()
                 x_offset += wall_thickness
 
     # 부상방지저판 치수
@@ -776,7 +776,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
                 p1=(-af_left_ext, 0),
                 p2=(0, 0),
                 dimstyle="EZDXF"
-            )
+            ).render()
             # 저판 두께 (수직, LT와 동일 레벨)
             msp.add_linear_dim(
                 base=(-af_left_ext - dim_offset, LT / 2),
@@ -784,7 +784,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
                 p2=(-af_left_ext, LT),
                 angle=90,
                 dimstyle="EZDXF"
-            )
+            ).render()
 
     # 토피 치수 (우측)
     if earth_cover > 0:
@@ -795,7 +795,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
             p2=(right_x_far, ground_y),
             angle=90,
             dimstyle="EZDXF"
-        )
+        ).render()
 
         # 지하수위 깊이 치수
         if water_level > 0:
@@ -806,7 +806,7 @@ def create_culvert_dxf(culvert_data, ground_info=None):
                 p2=(right_x, ground_y),
                 angle=90,
                 dimstyle="EZDXF"
-            )
+            ).render()
 
 
     return doc
