@@ -1,4 +1,7 @@
-from PyQt5.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QSplitter
+import json
+import os
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+                              QSplitter, QFileDialog, QMessageBox)
 from PyQt5.QtCore import Qt
 from esc_culvert_menu_bar import create_menu_bar
 from esc_culvert_toolbars import create_toolbars
@@ -12,10 +15,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("암거설계프로그램")
         self.setGeometry(100, 100, 1200, 800)
+        self._current_file_path = None
 
         self.create_menu_bar()
         self.create_toolbars()
-        
+
         self.create_central_widget()
 
         self.statusBar().showMessage('기본 정보를 입력하세요')
@@ -34,7 +38,7 @@ class MainWindow(QMainWindow):
     def create_toolbars(self):
         self.basic_toolbar, _, _ = create_toolbars(self)
         self.addToolBar(self.basic_toolbar)
-        
+
         # 기본 툴바만 표시
         self.basic_toolbar.show()
 
@@ -108,11 +112,11 @@ class MainWindow(QMainWindow):
         if root_item:
             self.custom_tree_widget.tree_widget.setCurrentItem(root_item)
             self.on_tree_item_clicked(root_item)
-    
+
     def handle_tree_widget_closed(self):
         self.show_tree_action.setChecked(False)
         self.update_splitter()
-        
+
     def update_splitter(self):
         if self.custom_tree_widget.isVisible():
             self.splitter.setSizes([int(self.width() * 0.3), int(self.width() * 0.7)])
@@ -158,3 +162,152 @@ class MainWindow(QMainWindow):
             scene = self.graphics_view.scene()
             display_dxf(doc, scene)
             self.graphics_view.fit_to_scene()
+
+    # ========================================
+    # 파일 저장/불러오기/DXF 내보내기
+    # ========================================
+
+    def _collect_project_data(self):
+        """현재 프로젝트의 전체 데이터를 딕셔너리로 수집"""
+        # 단면제원 위젯이 열려 있으면 최신 값 캐시
+        self.table_widget._save_section_data_to_cache()
+
+        return {
+            'projectInfo': {
+                'businessName': '',
+                'client': '',
+                'constructor': '',
+                'siteName': ''
+            },
+            'designConditions': {
+                'standard': '콘크리트구조기준',
+                'designLife': '100년',
+                'environment': '건조 환경'
+            },
+            'materials': self.table_widget.get_material_properties(),
+            'groundInfo': self.table_widget.get_ground_info(),
+            'sectionData': self.table_widget.get_culvert_section_data()
+        }
+
+    def _apply_project_data(self, data):
+        """불러온 데이터를 위젯에 적용"""
+        tw = self.table_widget
+
+        # 재료 특성
+        mat = data.get('materials', {})
+        tw.concrete_strength = mat.get('fck', 30.0)
+        tw.rebar_yield_strength = mat.get('fy', 400.0)
+
+        # 지반정보
+        gi = data.get('groundInfo', {})
+        tw.ground_info = {
+            'earthCoverDepth': gi.get('earthCoverDepth', 2000),
+            'groundwaterLevel': gi.get('groundwaterLevel', 3000),
+            'frictionAngle': gi.get('frictionAngle', 30),
+            'soilUnitWeight': gi.get('soilUnitWeight', 18.0)
+        }
+
+        # 단면 데이터
+        sd = data.get('sectionData', {})
+        if sd:
+            # 헌치
+            haunch = sd.get('haunch', None)
+            if haunch:
+                tw.haunch_data = haunch
+
+            # 기둥및종거더
+            cg = sd.get('columnGirder', None)
+            if cg:
+                tw.column_girder_data = cg
+
+            # 부상방지저판
+            af = sd.get('antiFloat', None)
+            if af:
+                tw.anti_float_data = af
+
+            # 캐시 갱신 (단면 테이블 값)
+            tw._cached_culvert_data = {
+                'culvert_count': sd.get('culvert_count', 3),
+                'H': sd.get('H', 4200),
+                'H4': sd.get('H4', 0),
+                'B': sd.get('B', [4000, 4000, 4000]),
+                'UT': sd.get('UT', 600),
+                'LT': sd.get('LT', 800),
+                'WL': sd.get('WL', 600),
+                'WR': sd.get('WR', 600),
+                'middle_walls': sd.get('middle_walls', [
+                    {'type': '연속벽', 'thickness': 600},
+                    {'type': '연속벽', 'thickness': 600}
+                ]),
+                'haunch': tw.haunch_data,
+                'columnGirder': tw.column_girder_data,
+                'antiFloat': tw.anti_float_data
+            }
+
+        # 현재 보고 있는 폼 다시 그리기
+        current_item = self.custom_tree_widget.tree_widget.currentItem()
+        if current_item:
+            self.on_tree_item_clicked(current_item)
+
+    def save_project(self):
+        """프로젝트를 JSON 파일로 저장"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, '프로젝트 저장',
+            self._current_file_path or 'esc_culvert_project.json',
+            'JSON 파일 (*.json);;모든 파일 (*)'
+        )
+        if not file_path:
+            return
+
+        try:
+            data = self._collect_project_data()
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            self._current_file_path = file_path
+            self.statusBar().showMessage(f'저장 완료: {os.path.basename(file_path)}')
+        except Exception as e:
+            QMessageBox.critical(self, '저장 오류', f'파일 저장에 실패했습니다.\n{e}')
+
+    def load_project(self):
+        """JSON 파일에서 프로젝트 불러오기"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, '프로젝트 불러오기',
+            '',
+            'JSON 파일 (*.json);;모든 파일 (*)'
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            self._apply_project_data(data)
+            self._current_file_path = file_path
+            self.statusBar().showMessage(f'불러오기 완료: {os.path.basename(file_path)}')
+        except json.JSONDecodeError:
+            QMessageBox.critical(self, '불러오기 오류', '유효하지 않은 JSON 파일입니다.')
+        except Exception as e:
+            QMessageBox.critical(self, '불러오기 오류', f'파일을 불러오는데 실패했습니다.\n{e}')
+
+    def export_dxf(self):
+        """현재 단면을 DXF 파일로 내보내기"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 'DXF 파일로 내보내기',
+            'esc_culvert_section.dxf',
+            'DXF 파일 (*.dxf);;모든 파일 (*)'
+        )
+        if not file_path:
+            return
+
+        try:
+            culvert_data = self.table_widget.get_culvert_section_data()
+            if not culvert_data:
+                QMessageBox.warning(self, '내보내기 오류', '단면제원 데이터가 없습니다.')
+                return
+
+            ground_info = self.table_widget.get_ground_info()
+            doc = create_culvert_dxf(culvert_data, ground_info)
+            doc.saveas(file_path)
+            self.statusBar().showMessage(f'DXF 내보내기 완료: {os.path.basename(file_path)}')
+        except Exception as e:
+            QMessageBox.critical(self, '내보내기 오류', f'DXF 파일 내보내기에 실패했습니다.\n{e}')

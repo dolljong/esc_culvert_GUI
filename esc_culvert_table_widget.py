@@ -847,8 +847,8 @@ class ESCCulvertTableWidget(QWidget):
 
     def get_material_properties(self):
         return {
-            "concrete_strength": self.concrete_strength,
-            "rebar_yield_strength": self.rebar_yield_strength
+            "fck": self.concrete_strength,
+            "fy": self.rebar_yield_strength
         }
 
     def get_section_properties(self):
