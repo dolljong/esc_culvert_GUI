@@ -498,13 +498,13 @@ def create_buoyancy_shapes_dxf(section_data):
         doc.linetypes.add('DASHED', pattern=[0.5, 0.25, -0.25])
 
     # 색상
-    CLR_OUTLINE = 8   # 회색 (전체 윤곽)
-    CLR_RECT = 1      # 빨강 (사각형)
-    CLR_TRI = 4       # 시안 (삼각형)
-    CLR_GIRDER = 6    # 마젠타 (기둥/종거더)
+    CLR_OUTLINE = 7   # 흰색 (전체 윤곽)
+    CLR_RECT = 7      # 흰색 (사각형)
+    CLR_TRI = 7       # 흰색 (삼각형)
+    CLR_GIRDER = 7    # 흰색 (기둥/종거더)
     CLR_NUM = 2       # 노랑 (번호)
     CLR_NAME = 3      # 녹색 (이름)
-    CLR_AF = 5        # 파랑 (부상방지저판)
+    CLR_AF = 7        # 흰색 (부상방지저판)
 
     shape_no = 0
 
