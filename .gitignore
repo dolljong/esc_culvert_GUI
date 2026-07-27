@@ -1,0 +1,15 @@
+# Python (전환 과정에서 남은 산출물)
+__pycache__/
+*.py[cod]
+
+# 로컬 전용
+.webui_secret_key
+
+# OS / 편집기
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# 내보내기 산출물
+*.dxf
