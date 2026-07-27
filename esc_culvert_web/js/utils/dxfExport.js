@@ -7,7 +7,8 @@ const DIM_OFFSET = 1000;
 const DIM_OFFSET_FAR = 1500;
 const EXT_LINE_GAP = 500;
 
-// 치수 문자 (도면 단위 mm 기준)
+// 치수 문자/화살표 (도면 단위 mm 기준, svgRenderer와 동일 값)
+const ARROW_SIZE = 100;
 const DIM_TEXT_SIZE = 250;
 // 치수선과 문자 사이 간격. 화면(svgRenderer)은 175를 쓰므로 25mm 차이가 있으나,
 // 기존 DXF 출력 결과를 그대로 유지하기 위해 150을 사용한다.
@@ -374,6 +375,27 @@ function createPolyline(points, layer) {
     return dxf;
 }
 
+// 치수 화살표 생성 (SOLID 채움 삼각형 — svgRenderer.drawArrow와 동일 형상)
+function createArrow(x, y, direction, layer) {
+    const s = ARROW_SIZE;
+    let p;
+    switch (direction) {
+        case 'right': p = [[x, y], [x + s, y - s / 3], [x + s, y + s / 3]]; break;
+        case 'left':  p = [[x, y], [x - s, y - s / 3], [x - s, y + s / 3]]; break;
+        case 'up':    p = [[x, y], [x - s / 3, y + s], [x + s / 3, y + s]]; break;
+        case 'down':  p = [[x, y], [x - s / 3, y - s], [x + s / 3, y - s]]; break;
+        default: return '';
+    }
+    // SOLID는 정점 4개를 요구한다. 삼각형은 3번째 정점을 반복해 표현한다.
+    let dxf = '0\nSOLID\n';
+    dxf += '8\n' + layer + '\n';
+    dxf += '10\n' + p[0][0] + '\n20\n' + p[0][1] + '\n30\n0\n';
+    dxf += '11\n' + p[1][0] + '\n21\n' + p[1][1] + '\n31\n0\n';
+    dxf += '12\n' + p[2][0] + '\n22\n' + p[2][1] + '\n32\n0\n';
+    dxf += '13\n' + p[2][0] + '\n23\n' + p[2][1] + '\n33\n0\n';
+    return dxf;
+}
+
 // 수평 치수선 생성 (SVG drawHorizontalDimension과 동일 로직)
 function createHDim(x1, x2, y, offset, text, layer, extGap) {
     const dimY = y + offset;
@@ -386,6 +408,9 @@ function createHDim(x1, x2, y, offset, text, layer, extGap) {
     dxf += createLine(x2, extStart, x2, dimY, layer);
     // 치수선
     dxf += createLine(x1, dimY, x2, dimY, layer);
+    // 화살표
+    dxf += createArrow(x1, dimY, 'right', layer);
+    dxf += createArrow(x2, dimY, 'left', layer);
     // 텍스트
     const textX = (x1 + x2) / 2;
     const textY = dimY + sign * DIM_TEXT_GAP;
@@ -406,6 +431,9 @@ function createVDim(x, y1, y2, offset, text, layer, extGap) {
     dxf += createLine(extStart, y2, dimX, y2, layer);
     // 치수선
     dxf += createLine(dimX, y1, dimX, y2, layer);
+    // 화살표
+    dxf += createArrow(dimX, y1, 'up', layer);
+    dxf += createArrow(dimX, y2, 'down', layer);
     // 텍스트
     const textX = dimX + sign * DIM_TEXT_GAP;
     const textY = (y1 + y2) / 2;
