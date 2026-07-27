@@ -598,10 +598,10 @@ export class SvgRenderer {
         this.drawArrow(parent, x1, dimY, 'right');
         this.drawArrow(parent, x2, dimY, 'left');
 
-        // 텍스트
+        // 텍스트 — 치수선 위쪽(+Y). 치수선이 도형 위/아래 어디에 있든 같다.
         const textX = (x1 + x2) / 2;
         const textY = dimY + DIM_TEXT_GAP;
-        const textEl = this.createText(textX, textY, text, offset < 0);
+        const textEl = this.createText(textX, textY, text);
         parent.appendChild(textEl);
     }
 
@@ -625,10 +625,10 @@ export class SvgRenderer {
         this.drawArrow(parent, dimX, y1, 'up');
         this.drawArrow(parent, dimX, y2, 'down');
 
-        // 텍스트 (회전)
+        // 텍스트 (회전) — 90° 회전 문자 기준의 "위쪽"은 치수선 왼쪽(-X)이다.
         const textX = dimX - DIM_TEXT_GAP;
         const textY = (y1 + y2) / 2;
-        const textEl = this.createText(textX, textY, text, false, true);
+        const textEl = this.createText(textX, textY, text, true);
         parent.appendChild(textEl);
     }
 
@@ -670,7 +670,7 @@ export class SvgRenderer {
     }
 
     // 텍스트 생성
-    createText(x, y, text, flipY = false, vertical = false) {
+    createText(x, y, text, vertical = false) {
         const textEl = document.createElementNS(SVG_NS, 'text');
         textEl.setAttribute('x', x);
         textEl.setAttribute('y', y);

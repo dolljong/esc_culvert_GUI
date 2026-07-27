@@ -10,9 +10,8 @@ const EXT_LINE_GAP = 500;
 // 치수 문자/화살표 (도면 단위 mm 기준, svgRenderer와 동일 값)
 const ARROW_SIZE = 100;
 const DIM_TEXT_SIZE = 250;
-// 치수선과 문자 사이 간격. 화면(svgRenderer)은 175를 쓰므로 25mm 차이가 있으나,
-// 기존 DXF 출력 결과를 그대로 유지하기 위해 150을 사용한다.
-const DIM_TEXT_GAP = 150;
+// 치수선과 문자 사이 간격 (svgRenderer와 동일)
+const DIM_TEXT_GAP = 175;
 
 // DXF 파일 생성 및 다운로드
 export function exportDXF() {
@@ -402,9 +401,9 @@ function createHDim(x1, x2, y, offset, text, layer, extGap) {
     // 화살표
     dxf += createArrow(x1, dimY, 'right', layer);
     dxf += createArrow(x2, dimY, 'left', layer);
-    // 텍스트
+    // 텍스트 — 치수선 위쪽(+Y)에 둔다. 치수선이 도형 위/아래 어디에 있든 같다.
     const textX = (x1 + x2) / 2;
-    const textY = dimY + sign * DIM_TEXT_GAP;
+    const textY = dimY + DIM_TEXT_GAP;
     dxf += createText(textX, textY, DIM_TEXT_SIZE, 0, text, layer);
 
     return dxf;
@@ -425,8 +424,8 @@ function createVDim(x, y1, y2, offset, text, layer, extGap) {
     // 화살표
     dxf += createArrow(dimX, y1, 'up', layer);
     dxf += createArrow(dimX, y2, 'down', layer);
-    // 텍스트
-    const textX = dimX + sign * DIM_TEXT_GAP;
+    // 텍스트 — 90° 회전 문자 기준의 "위쪽"은 치수선 왼쪽(-X)이다. 수평 치수선과 같은 규칙.
+    const textX = dimX - DIM_TEXT_GAP;
     const textY = (y1 + y2) / 2;
     dxf += createText(textX, textY, DIM_TEXT_SIZE, 90, text, layer);
 
