@@ -52,7 +52,8 @@ function generateBuoyancyReport(sectionData, groundInfo) {
     const afUse = antiFloat.use || false;
     const afLeftExt = parseFloat(antiFloat.leftExtension || 500);
     const afRightExt = parseFloat(antiFloat.rightExtension || 500);
-    const afThickness = parseFloat(antiFloat.thickness || 300);
+    // 두께 기본값은 하부슬래브 두께(LT)와 같다
+    const afThickness = parseFloat(antiFloat.thickness || LT);
 
     // 기본 치수
     const totalInnerWidth = B_list.reduce((a, b) => a + b, 0);

@@ -314,7 +314,13 @@ function registerColumnGirderEvents() {
 
 // 부상방지저판 폼 생성
 function createAntiFloatForm(data) {
-    const af = data.antiFloat || { use: false, leftExtension: 500, rightExtension: 500, thickness: 300 };
+    const af = data.antiFloat || {
+        use: false, leftExtension: 500, rightExtension: 500,
+        thickness: data.LT, thicknessAuto: true
+    };
+    const autoNote = af.thicknessAuto
+        ? `<span style="color: var(--accent-color);">두께는 하부슬래브 두께(LT=${data.LT})를 따릅니다. 직접 입력하면 그 값으로 고정됩니다.</span><br>`
+        : `<span>두께를 직접 지정했습니다. <a href="#" id="antifloat-thickness-reset" style="color: var(--accent-color);">하부슬래브 두께(LT=${data.LT})로 되돌리기</a></span><br>`;
     return `
         <div style="margin-bottom: 12px;">
             <label style="font-size:13px; cursor:pointer;">
@@ -337,7 +343,9 @@ function createAntiFloatForm(data) {
                 </tr>
             </tbody>
         </table>
-        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">* 모든 치수 단위: mm</div>`;
+        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 11px;">
+            ${af.use ? autoNote : ''}* 모든 치수 단위: mm
+        </div>`;
 }
 
 // 부상방지저판 이벤트 등록
@@ -367,11 +375,30 @@ function registerAntiFloatEvents() {
                 const data = state.getSectionData();
                 const af = { ...(data.antiFloat || {}) };
                 af[key] = value;
+                // 두께를 직접 입력하면 더 이상 하부슬래브 두께를 따라가지 않는다
+                if (key === 'thickness') af.thicknessAuto = false;
                 state.updateSectionData('antiFloat', af);
+                if (key === 'thickness') renderSectionTabContent();
                 updateSvg();
             });
         }
     });
+
+    // 두께를 다시 하부슬래브 두께(LT)에 맞추기
+    const resetLink = document.getElementById('antifloat-thickness-reset');
+    if (resetLink) {
+        resetLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            const data = state.getSectionData();
+            state.updateSectionData('antiFloat', {
+                ...(data.antiFloat || {}),
+                thickness: data.LT,
+                thicknessAuto: true
+            });
+            renderSectionTabContent();
+            updateSvg();
+        });
+    }
 }
 
 // 테이블 입력 이벤트 등록

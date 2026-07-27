@@ -55,13 +55,28 @@ const defaultState = {
             use: false,
             leftExtension: 500,
             rightExtension: 500,
-            thickness: 300
+            // 두께 기본값은 하부슬래브 두께(LT)와 같다.
+            // thicknessAuto가 true인 동안 LT를 따라가고,
+            // 사용자가 두께를 직접 입력하면 false가 되어 그 값을 유지한다.
+            thickness: 800,
+            thicknessAuto: true
         }
     }
 };
 
 // 앱 상태 객체
 let appState = JSON.parse(JSON.stringify(defaultState));
+
+// 부상방지저판 두께를 하부슬래브 두께(LT)에 맞춘다.
+// 사용자가 두께를 직접 입력한 경우(thicknessAuto === false)에는 건드리지 않는다.
+// 예전에 저장된 프로젝트에는 thicknessAuto가 없는데, 이때는 그 프로젝트가
+// 가지고 있던 두께를 그대로 존중해야 하므로 자동 추종하지 않는다.
+function syncAntiFloatThickness() {
+    const sd = appState.sectionData;
+    const af = sd.antiFloat;
+    if (!af || af.thicknessAuto !== true) return;
+    sd.antiFloat = { ...af, thickness: sd.LT };
+}
 
 // 이벤트 리스너 저장소
 const listeners = {
@@ -136,6 +151,7 @@ export const state = {
     // 단면 데이터 업데이트
     updateSectionData(key, value) {
         appState.sectionData[key] = value;
+        if (key === 'LT') syncAntiFloatThickness();
         this.emit('sectionDataChange', appState.sectionData);
     },
 
