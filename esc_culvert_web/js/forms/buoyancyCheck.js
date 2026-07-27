@@ -135,14 +135,14 @@ function generateBuoyancyReport(sectionData, groundInfo) {
         add();
     }
 
-    function addRectCtc(label, w, h, colW, ctcVal) {
+    function addRectCtc(label, w, h, colW, ctcVal, heightDesc) {
         shapeNo++;
         const areaFull = w * h;
         const areaPerM = areaFull * colW / ctcVal;
         const weight = GAMMA_C * areaPerM / 1e6;
         totalWeight += weight;
         add(`   [사각형 No.${shapeNo}] ${label}`);
-        add(`     기둥높이 = ${fmt(h)} mm`);
+        add(`     기둥높이 = ${heightDesc ? heightDesc + ' = ' : ''}${fmt(h)} mm`);
         add(`     기둥 단면적 = ${fmt(w)} × ${fmt(h)} = ${fmt(areaFull)} mm²`);
         add(`     단위m 환산 = ${fmt(areaFull)} × 기둥폭(${fmt(colW)}) / CTC(${fmt(ctcVal)})`);
         add(`                = ${fmt2(areaPerM)} mm²/m`);
@@ -229,7 +229,8 @@ function generateBuoyancyReport(sectionData, groundInfo) {
             // 기둥본체
             const colClearH = H - upperGirderH - lowerGirderH;
             if (colClearH > 0 && ctc > 0) {
-                addRectCtc(`중간벽체${i + 1} 기둥본체 (CTC 고려)`, mwThickness, colClearH, colWidth, ctc);
+                addRectCtc(`중간벽체${i + 1} 기둥본체 (CTC 고려)`, mwThickness, colClearH, colWidth, ctc,
+                    `H(${fmt(H)}) - 상부거더(${fmt(upperGirderH)}) - 하부거더(${fmt(lowerGirderH)})`);
             }
         }
     }

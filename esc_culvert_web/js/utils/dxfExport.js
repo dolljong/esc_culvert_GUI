@@ -7,6 +7,12 @@ const DIM_OFFSET = 1000;
 const DIM_OFFSET_FAR = 1500;
 const EXT_LINE_GAP = 500;
 
+// 치수 문자 (도면 단위 mm 기준)
+const DIM_TEXT_SIZE = 250;
+// 치수선과 문자 사이 간격. 화면(svgRenderer)은 175를 쓰므로 25mm 차이가 있으나,
+// 기존 DXF 출력 결과를 그대로 유지하기 위해 150을 사용한다.
+const DIM_TEXT_GAP = 150;
+
 // DXF 파일 생성 및 다운로드
 export function exportDXF() {
     const data = state.getSectionData();
@@ -373,7 +379,6 @@ function createHDim(x1, x2, y, offset, text, layer, extGap) {
     const dimY = y + offset;
     const sign = offset > 0 ? 1 : -1;
     const extStart = y + sign * (extGap || EXT_LINE_GAP);
-    const textHeight = 100;
     let dxf = '';
 
     // 보조선 (간격 두고 시작)
@@ -383,8 +388,8 @@ function createHDim(x1, x2, y, offset, text, layer, extGap) {
     dxf += createLine(x1, dimY, x2, dimY, layer);
     // 텍스트
     const textX = (x1 + x2) / 2;
-    const textY = dimY + sign * textHeight * 1.5;
-    dxf += createText(textX, textY, textHeight, 0, text, layer);
+    const textY = dimY + sign * DIM_TEXT_GAP;
+    dxf += createText(textX, textY, DIM_TEXT_SIZE, 0, text, layer);
 
     return dxf;
 }
@@ -394,7 +399,6 @@ function createVDim(x, y1, y2, offset, text, layer, extGap) {
     const dimX = x + offset;
     const sign = offset > 0 ? 1 : -1;
     const extStart = x + sign * (extGap || EXT_LINE_GAP);
-    const textHeight = 100;
     let dxf = '';
 
     // 보조선 (간격 두고 시작)
@@ -403,9 +407,9 @@ function createVDim(x, y1, y2, offset, text, layer, extGap) {
     // 치수선
     dxf += createLine(dimX, y1, dimX, y2, layer);
     // 텍스트
-    const textX = dimX + sign * textHeight * 1.5;
+    const textX = dimX + sign * DIM_TEXT_GAP;
     const textY = (y1 + y2) / 2;
-    dxf += createText(textX, textY, textHeight, 90, text, layer);
+    dxf += createText(textX, textY, DIM_TEXT_SIZE, 90, text, layer);
 
     return dxf;
 }

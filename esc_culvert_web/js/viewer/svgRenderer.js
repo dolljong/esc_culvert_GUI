@@ -18,6 +18,10 @@ const DIM_OFFSET_FAR = 1500;
 const ARROW_SIZE = 100;
 const EXT_LINE_GAP = 500;
 
+// 치수 문자 (도면 단위 mm 기준)
+const DIM_TEXT_SIZE = 250;
+const DIM_TEXT_GAP = 175;   // 치수선과 문자 사이 간격
+
 // 패딩 (뷰박스용)
 const PADDING = 1500;
 
@@ -608,7 +612,7 @@ export class SvgRenderer {
 
         // 텍스트
         const textX = (x1 + x2) / 2;
-        const textY = dimY + 25;
+        const textY = dimY + DIM_TEXT_GAP;
         const textEl = this.createText(textX, textY, text, offset < 0);
         parent.appendChild(textEl);
     }
@@ -634,7 +638,7 @@ export class SvgRenderer {
         this.drawArrow(parent, dimX, y2, 'down');
 
         // 텍스트 (회전)
-        const textX = dimX - 25;
+        const textX = dimX - DIM_TEXT_GAP;
         const textY = (y1 + y2) / 2;
         const textEl = this.createText(textX, textY, text, false, true);
         parent.appendChild(textEl);
@@ -683,6 +687,7 @@ export class SvgRenderer {
         textEl.setAttribute('x', x);
         textEl.setAttribute('y', y);
         textEl.setAttribute('class', 'dimension-text');
+        textEl.setAttribute('font-size', DIM_TEXT_SIZE);
 
         // Y축이 반전되어 있으므로 텍스트도 반전 필요
         let transform = `scale(1, -1) translate(0, ${-2 * y})`;
