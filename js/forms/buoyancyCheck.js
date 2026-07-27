@@ -61,14 +61,10 @@ function generateBuoyancyReport(sectionData, groundInfo) {
     const totalWidth = WL + totalInnerWidth + totalMwThickness + WR;
     const totalHeight = LT + H + UT;
 
-    let bottomWidth, bottomDepth;
-    if (afUse) {
-        bottomWidth = afLeftExt + totalWidth + afRightExt;
-        bottomDepth = earthCover + totalHeight + afThickness;
-    } else {
-        bottomWidth = totalWidth;
-        bottomDepth = earthCover + totalHeight;
-    }
+    // 부상방지저판은 하부슬래브와 같은 높이에서 좌우 측면으로 내미는 날개다.
+    // 구조물 하단 깊이는 변하지 않고, 부력을 받는 폭만 날개만큼 넓어진다.
+    const bottomWidth = afUse ? (afLeftExt + totalWidth + afRightExt) : totalWidth;
+    const bottomDepth = earthCover + totalHeight;
 
     const lines = [];
     const add = (text = '') => lines.push(text);
@@ -109,9 +105,10 @@ function generateBuoyancyReport(sectionData, groundInfo) {
     add(`                         = ${fmt(totalHeight)} mm = ${fmt3(totalHeight / 1000)} m`);
 
     if (afUse) {
-        add(`   부상방지저판           = 적용`);
+        add(`   부상방지저판           = 적용 (하부슬래브 높이에서 좌우 측면으로 내밈)`);
         add(`     좌측확장: ${fmt(afLeftExt)} mm, 우측확장: ${fmt(afRightExt)} mm, 두께: ${fmt(afThickness)} mm`);
         add(`     하단 총폭 = ${fmt(afLeftExt)} + ${fmt(totalWidth)} + ${fmt(afRightExt)} = ${fmt(bottomWidth)} mm`);
+        add(`     ※ 날개 밑면이 하부슬래브 밑면과 같으므로 구조물 하단 깊이는 변하지 않는다.`);
     }
     add();
 
@@ -274,19 +271,21 @@ function generateBuoyancyReport(sectionData, groundInfo) {
         parseFloat(rightHaunch.lower.width || 0),
         parseFloat(rightHaunch.lower.height || 0));
 
-    // 부상방지저판
-    if (afUse) {
-        const afTotalWidth = afLeftExt + totalWidth + afRightExt;
-        shapeNo++;
-        const area = afTotalWidth * afThickness;
-        const weight = GAMMA_C * area / 1e6;
-        totalWeight += weight;
-        add(`   [사각형 No.${shapeNo}] 부상방지저판`);
-        add(`     폭 = ${fmt(afLeftExt)} + ${fmt(totalWidth)} + ${fmt(afRightExt)} = ${fmt(afTotalWidth)} mm`);
-        add(`     크기 = ${fmt(afTotalWidth)} × ${fmt(afThickness)} mm`);
-        add(`     면적 A = ${fmt(afTotalWidth)} × ${fmt(afThickness)} = ${fmt(area)} mm²`);
-        add(`     무게 W = ${fmt2(GAMMA_C)} × ${fmt(area)} / 10⁶ = ${fmt2(weight)} kN/m`);
-        add();
+    // 부상방지저판 (좌우 날개를 각각 산정한다.
+    // 본체 아래는 이미 하부슬래브로 계상했으므로 날개 부분만 더한다.)
+    if (afUse && afThickness > 0) {
+        [['좌측', afLeftExt], ['우측', afRightExt]].forEach(([side, ext]) => {
+            if (ext <= 0) return;
+            shapeNo++;
+            const area = ext * afThickness;
+            const weight = GAMMA_C * area / 1e6;
+            totalWeight += weight;
+            add(`   [사각형 No.${shapeNo}] 부상방지저판 ${side}날개`);
+            add(`     크기 = ${fmt(ext)} × ${fmt(afThickness)} mm`);
+            add(`     면적 A = ${fmt(ext)} × ${fmt(afThickness)} = ${fmt(area)} mm²`);
+            add(`     무게 W = ${fmt2(GAMMA_C)} × ${fmt(area)} / 10⁶ = ${fmt2(weight)} kN/m`);
+            add();
+        });
     }
 
     add('   ' + '─'.repeat(51));
@@ -297,23 +296,60 @@ function generateBuoyancyReport(sectionData, groundInfo) {
     add('4. 상재토 무게 (단위 m 당)');
     add('─'.repeat(55));
     const soilArea = totalWidth * earthCover;
-    const soilWeight = gammaS * soilArea / 1e6;
-    add(`   토피고 = ${fmt(earthCover)} mm = ${fmt3(earthCover / 1000)} m`);
-    add(`   폭    = ${fmt(totalWidth)} mm = ${fmt3(totalWidth / 1000)} m`);
-    add(`   면적  = ${fmt(totalWidth)} × ${fmt(earthCover)} = ${fmt(soilArea)} mm²`);
-    add(`   무게 (Ws) = γs × A / 10⁶ = ${fmt2(gammaS)} × ${fmt(soilArea)} / 10⁶ = ${fmt2(soilWeight)} kN/m`);
+    const coverWeight = gammaS * soilArea / 1e6;
+    // 저판이 없으면 항목이 하나뿐이므로 번호를 붙이지 않는다 (기존 출력과 동일하게 유지)
+    const ind = afUse ? '      ' : '   ';
+    if (afUse) add('   ① 구조물 상부 토피');
+    add(`${ind}토피고 = ${fmt(earthCover)} mm = ${fmt3(earthCover / 1000)} m`);
+    add(`${ind}폭    = ${fmt(totalWidth)} mm = ${fmt3(totalWidth / 1000)} m`);
+    add(`${ind}면적  = ${fmt(totalWidth)} × ${fmt(earthCover)} = ${fmt(soilArea)} mm²`);
+    if (afUse) {
+        add(`${ind}무게  = ${fmt2(gammaS)} × ${fmt(soilArea)} / 10⁶ = ${fmt2(coverWeight)} kN/m`);
+        add();
+    }
+
+    // 부상방지저판 날개 위에 얹히는 흙기둥. 측면 저판이 부상을 막는 주된 원리다.
+    // 지하수위 아래 구간은 부력을 따로 산정하므로 수중단위중량(γ' = γs - γw)을 쓴다.
+    let wingSoilWeight = 0;
+    if (afUse) {
+        const wingWidth = afLeftExt + afRightExt;
+        const wingTopDepth = earthCover + totalHeight - afThickness;  // 날개 상면의 지표면 기준 깊이
+        const hDry = Math.max(0, Math.min(wingTopDepth, gwl));
+        const hSub = Math.max(0, wingTopDepth - gwl);
+        const gammaSub = gammaS - GAMMA_W;
+        const wDry = gammaS * (wingWidth * hDry) / 1e6;
+        const wSub = gammaSub * (wingWidth * hSub) / 1e6;
+        wingSoilWeight = wDry + wSub;
+
+        add('   ② 부상방지저판 날개 위 흙기둥');
+        add(`      날개 폭 합계 = ${fmt(afLeftExt)} + ${fmt(afRightExt)} = ${fmt(wingWidth)} mm`);
+        add(`      날개 상면 깊이 = 토피(${fmt(earthCover)}) + 총높이(${fmt(totalHeight)}) - 두께(${fmt(afThickness)})`);
+        add(`                     = ${fmt(wingTopDepth)} mm`);
+        add(`      지하수위 위 (γs)  : h = ${fmt(hDry)} mm → ${fmt2(gammaS)} × ${fmt(wingWidth * hDry)} / 10⁶ = ${fmt2(wDry)} kN/m`);
+        add(`      지하수위 아래 (γ'): h = ${fmt(hSub)} mm, γ' = ${fmt2(gammaS)} - ${fmt2(GAMMA_W)} = ${fmt2(gammaSub)} kN/m³`);
+        add(`                          → ${fmt2(gammaSub)} × ${fmt(wingWidth * hSub)} / 10⁶ = ${fmt2(wSub)} kN/m`);
+        add(`      소계 = ${fmt2(wingSoilWeight)} kN/m`);
+        add();
+    }
+
+    const soilWeight = coverWeight + wingSoilWeight;
+    if (afUse) {
+        add('   ' + '─'.repeat(51));
+        add(`   상재토 무게 합계 (Ws) = ${fmt2(coverWeight)} + ${fmt2(wingSoilWeight)} = ${fmt2(soilWeight)} kN/m`);
+    } else {
+        add(`   무게 (Ws) = γs × A / 10⁶ = ${fmt2(gammaS)} × ${fmt(soilArea)} / 10⁶ = ${fmt2(soilWeight)} kN/m`);
+    }
     add();
 
     // 5. 부력 산정
     add('5. 부력 산정 (단위 m 당)');
     add('─'.repeat(55));
 
-    if (afUse) {
-        add(`   구조물 하단 깊이 = 토피(${fmt(earthCover)}) + 총높이(${fmt(totalHeight)}) + 부상방지저판(${fmt(afThickness)})`);
-    } else {
-        add(`   구조물 하단 깊이 = 토피(${fmt(earthCover)}) + 총높이(${fmt(totalHeight)})`);
-    }
+    add(`   구조물 하단 깊이 = 토피(${fmt(earthCover)}) + 총높이(${fmt(totalHeight)})`);
     add(`                     = ${fmt(bottomDepth)} mm (지표면 기준)`);
+    if (afUse) {
+        add(`   ※ 부상방지저판은 측면 날개이므로 하단 깊이에 영향을 주지 않는다.`);
+    }
     add(`   지하수위            = ${fmt(gwl)} mm (지표면 기준)`);
     add();
 

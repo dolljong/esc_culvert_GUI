@@ -167,26 +167,14 @@ export class SvgRenderer {
 
     // 외곽선 그리기
     drawOuterProfile(parent, data, dims) {
-        const af = (data.antiFloat && data.antiFloat.use) ? data.antiFloat : null;
-        const t = af ? (af.thickness || 0) : 0;
-
-        if (af && t > 0) {
-            // 부상방지저판이 있는 경우: 벽체 하단을 저판 상단(y=t)으로
-            const points = [
-                [0, t], [0, dims.totalHeight],
-                [dims.totalWidth, dims.totalHeight], [dims.totalWidth, t]
-            ];
-            parent.appendChild(this.createPolyline(points, 'outer-line'));
-            // 하부 바닥선
-            parent.appendChild(this.createLine(0, 0, dims.totalWidth, 0, 'outer-line'));
-        } else {
-            const points = [
-                [0, 0], [dims.totalWidth, 0],
-                [dims.totalWidth, dims.totalHeight],
-                [0, dims.totalHeight], [0, 0]
-            ];
-            parent.appendChild(this.createPolyline(points, 'outer-line'));
-        }
+        // 부상방지저판은 하부슬래브 높이에서 측면으로 내미는 날개라서
+        // 본체 외곽선에는 영향을 주지 않는다 (날개는 drawAntiFloatSlab에서 그린다).
+        const points = [
+            [0, 0], [dims.totalWidth, 0],
+            [dims.totalWidth, dims.totalHeight],
+            [0, dims.totalHeight], [0, 0]
+        ];
+        parent.appendChild(this.createPolyline(points, 'outer-line'));
     }
 
     // 칸별 헌치 데이터 가져오기
@@ -857,7 +845,12 @@ export class SvgRenderer {
         const rlW = (rightHaunch.lower&&rightHaunch.lower.width)||0, rlH_v = (rightHaunch.lower&&rightHaunch.lower.height)||0;
         if (rlW > 0 && rlH_v > 0) addTri([rwLeft,LT],[rwLeft-rlW,LT],[rwLeft,LT+rlH_v], 'buoy-tri', true);
 
-        if (afUse && afT > 0) addRect(-afLeft, -afT, totalWidth+afRight, 0, '부상방지저판', 'buoy-af');
+        // 부상방지저판: 하부슬래브와 같은 높이(y=0~afT)에서 좌우 측면으로 내민 날개.
+        // 계산서와 같은 순서·같은 분할(좌/우 각각 1개 도형)로 그린다.
+        if (afUse && afT > 0) {
+            if (afLeft > 0) addRect(-afLeft, 0, 0, afT, '부상방지저판 좌', 'buoy-af');
+            if (afRight > 0) addRect(totalWidth, 0, totalWidth+afRight, afT, '부상방지저판 우', 'buoy-af');
+        }
 
         // ── 치수선 ──
         const dimGroup = this.createGroup('dimensions');
@@ -892,14 +885,15 @@ export class SvgRenderer {
             }
         }
         if (afUse && afLeft > 0) this.drawHorizontalDimension(dimGroup, -afLeft, 0, 0, -dimOff, afLeft.toString());
-        if (afUse && afT > 0) this.drawVerticalDimension(dimGroup, -afLeft, -afT, 0, -dimOff, afT.toString());
+        if (afUse && afT > 0) this.drawVerticalDimension(dimGroup, -afLeft, 0, afT, -dimOff, afT.toString());
         mainGroup.appendChild(dimGroup);
 
         this.svg.appendChild(mainGroup);
         const pad = 1800;
         const minX = (afUse ? -afLeft : 0) - pad;
         const vW = totalWidth + (afUse ? afLeft+afRight : 0) + pad*2;
-        const vH = totalHeight + (afUse ? afT : 0) + pad*2;
+        // 날개가 본체 높이 안(0~afT)에 들어오므로 세로 여유를 더 잡지 않는다
+        const vH = totalHeight + pad*2;
         this.svg.setAttribute('viewBox', `${minX} ${-totalHeight - pad} ${vW} ${vH}`);
         mainGroup.setAttribute('transform', 'scale(1, -1)');
     }

@@ -133,21 +133,12 @@ function generateDXF(data) {
     dxf += '2\nENTITIES\n';
 
     // === 외곽선 ===
-    if (afData && afT > 0) {
-        // 부상방지저판이 있는 경우: 벽체 하단을 저판 상단(y=afT)에서 시작
-        dxf += createPolyline([
-            [0, afT], [0, dims.totalHeight],
-            [dims.totalWidth, dims.totalHeight], [dims.totalWidth, afT]
-        ], 'OUTER');
-        // 하부 바닥선
-        dxf += createLine(0, 0, dims.totalWidth, 0, 'OUTER');
-    } else {
-        dxf += createPolyline([
-            [0, 0], [dims.totalWidth, 0],
-            [dims.totalWidth, dims.totalHeight],
-            [0, dims.totalHeight], [0, 0]
-        ], 'OUTER');
-    }
+    // 부상방지저판은 측면 날개라서 본체 외곽선에 영향을 주지 않는다 (아래에서 따로 그린다).
+    dxf += createPolyline([
+        [0, 0], [dims.totalWidth, 0],
+        [dims.totalWidth, dims.totalHeight],
+        [0, dims.totalHeight], [0, 0]
+    ], 'OUTER');
 
     // === 내부 공간 (헌치 고려) ===
     let xOffset = data.WL;
