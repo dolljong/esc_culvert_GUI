@@ -13,27 +13,33 @@
     <div class="main-layout">
         <!-- 헤더 -->
         <header class="header">
-            <div class="header-title">ESC Culvert - 암거 설계 프로그램</div>
+            <div class="header-left">
+                <button id="btn-toggle-tree" class="icon-btn" title="트리메뉴 보기/숨기기" aria-label="트리메뉴 보기/숨기기" aria-expanded="true">☰</button>
+                <div class="header-title">ESC Culvert - 암거 설계 프로그램</div>
+            </div>
             <nav class="header-menu">
                 <button id="btn-new" class="menu-btn">새 프로젝트</button>
-                <button id="btn-save" class="menu-btn">저장</button>
-                <button id="btn-load" class="menu-btn">불러오기</button>
+                <button id="btn-save" class="menu-btn" title="Ctrl+S">저장</button>
+                <button id="btn-load" class="menu-btn" title="Ctrl+O">불러오기</button>
                 <button id="btn-export-dxf" class="menu-btn">DXF 내보내기</button>
             </nav>
         </header>
 
         <!-- 메인 컨텐츠 -->
-        <div class="content-area">
+        <div class="content-area" id="content-area">
             <!-- 트리 네비게이션 -->
-            <aside class="tree-panel">
+            <aside class="tree-panel" id="tree-panel">
                 <div class="tree-header">메뉴</div>
                 <ul id="tree-menu" class="tree-root">
                     <!-- JavaScript에서 동적 생성 -->
                 </ul>
             </aside>
 
+            <!-- 트리 / 본문 크기 조절 -->
+            <div class="splitter splitter-v" id="splitter-tree" role="separator" aria-orientation="vertical" title="드래그하여 너비 조절"></div>
+
             <!-- 우측 패널 -->
-            <main class="main-panel">
+            <main class="main-panel" id="main-panel">
                 <!-- SVG 뷰어 -->
                 <div class="viewer-panel">
                     <div class="viewer-toolbar">
@@ -49,6 +55,9 @@
                     </div>
                 </div>
 
+                <!-- 뷰어 / 폼 크기 조절 -->
+                <div class="splitter splitter-h" id="splitter-form" role="separator" aria-orientation="horizontal" title="드래그하여 높이 조절"></div>
+
                 <!-- 데이터 입력 폼 -->
                 <div class="form-panel">
                     <div id="form-title" class="form-title">프로젝트 정보</div>
@@ -58,6 +67,15 @@
                 </div>
             </main>
         </div>
+
+        <!-- 상태 표시줄 -->
+        <footer class="status-bar">
+            <span id="status-message" class="status-message">기본 정보를 입력하세요</span>
+            <span class="status-right">
+                <span id="status-save" class="status-save">저장되지 않음</span>
+                <span id="status-version" class="status-version"></span>
+            </span>
+        </footer>
     </div>
 
     <!-- JavaScript (ES 모듈) -->

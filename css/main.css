@@ -16,8 +16,10 @@
     --accent-color: #0066cc;
     --accent-hover: #0052a3;
     --header-height: 48px;
+    --status-height: 24px;
     --tree-width: 240px;
     --form-height: 35%;
+    --splitter-size: 5px;
 }
 
 html, body {
@@ -30,7 +32,7 @@ html, body {
 
 .main-layout {
     display: grid;
-    grid-template-rows: var(--header-height) 1fr;
+    grid-template-rows: var(--header-height) 1fr var(--status-height);
     height: 100vh;
     overflow: hidden;
 }
@@ -45,10 +47,48 @@ html, body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
 .header-title {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 트리 토글 버튼 (PyQt "보기 > 트리메뉴 보기" 대응) */
+.icon-btn {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.icon-btn:hover {
+    background-color: var(--bg-secondary);
+    border-color: var(--accent-color);
+}
+
+.icon-btn:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 1px;
 }
 
 .header-menu {
@@ -75,8 +115,18 @@ html, body {
 /* 콘텐츠 영역 */
 .content-area {
     display: grid;
-    grid-template-columns: var(--tree-width) 1fr;
+    grid-template-columns: var(--tree-width) var(--splitter-size) 1fr;
     overflow: hidden;
+}
+
+/* 트리 숨김 (PyQt QSplitter 폭 0 대응) */
+.content-area.tree-hidden {
+    grid-template-columns: 0 0 1fr;
+}
+
+.content-area.tree-hidden .tree-panel,
+.content-area.tree-hidden #splitter-tree {
+    display: none;
 }
 
 /* 트리 패널 */
@@ -100,8 +150,44 @@ html, body {
 /* 메인 패널 */
 .main-panel {
     display: grid;
-    grid-template-rows: 1fr var(--form-height);
+    grid-template-rows: 1fr var(--splitter-size) var(--form-height);
     overflow: hidden;
+}
+
+/* 스플리터 (PyQt QSplitter 대응) */
+.splitter {
+    background-color: var(--border-color);
+    transition: background-color 0.15s;
+    user-select: none;
+}
+
+.splitter:hover,
+.splitter.dragging {
+    background-color: var(--accent-color);
+}
+
+.splitter-v {
+    cursor: col-resize;
+}
+
+.splitter-h {
+    cursor: row-resize;
+}
+
+/* 드래그 중 iframe/텍스트 선택으로 포인터를 뺏기지 않도록 */
+body.resizing {
+    cursor: inherit;
+    user-select: none;
+}
+
+body.resizing-col,
+body.resizing-col * {
+    cursor: col-resize !important;
+}
+
+body.resizing-row,
+body.resizing-row * {
+    cursor: row-resize !important;
 }
 
 /* 뷰어 패널 */
@@ -133,6 +219,46 @@ html, body {
     flex: 1;
     padding: 16px;
     overflow-y: auto;
+}
+
+/* 상태 표시줄 (PyQt statusBar 대응) */
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 12px;
+    background-color: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+}
+
+.status-message {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
+.status-save.dirty {
+    color: #b06000;
+    font-weight: 600;
+}
+
+.status-save.saved {
+    color: #007744;
+}
+
+.status-version {
+    color: #999999;
 }
 
 /* 모달 팝업 */
