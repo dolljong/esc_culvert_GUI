@@ -3,7 +3,7 @@
 // 저장 방식은 localStorageBackend 하나에 갇혀 있고, 나머지 코드는 아래
 // storage 인터페이스(save/load/remove/exists/list)만 사용한다.
 // 나중에 사내 서버에 백엔드를 붙여 프로젝트를 공유 저장하기로 하면
-// 이 파일의 backend만 교체하면 되고 forms/*, app.js는 손대지 않는다.
+// 이 파일의 backend만 교체하면 되고 화면(js/screens) 코드는 손대지 않는다.
 //
 // 주의: 현재 구현은 브라우저 localStorage다. 따라서
 //   - 데이터는 접속한 브라우저·PC에만 남는다 (설계자 간 공유 안 됨)

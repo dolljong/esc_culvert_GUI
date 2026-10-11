@@ -3,84 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESC Culvert - 암거 설계 프로그램</title>
-    <!-- 인라인 파비콘 (별도 요청 없이 404 방지) -->
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230066cc'/%3E%3Crect x='3' y='4' width='10' height='8' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/tree.css">
-    <link rel="stylesheet" href="css/forms.css">
-    <link rel="stylesheet" href="css/viewer.css">
+    <title>ESC Culvert</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2339a845'/%3E%3Crect x='3' y='4' width='10' height='8' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="css/esc-culvert.css">
 </head>
 <body>
-    <div class="main-layout">
-        <!-- 헤더 -->
-        <header class="header">
-            <div class="header-left">
-                <button id="btn-toggle-tree" class="icon-btn" title="트리메뉴 보기/숨기기" aria-label="트리메뉴 보기/숨기기" aria-expanded="true">☰</button>
-                <div class="header-title">ESC Culvert - 암거 설계 프로그램</div>
-            </div>
-            <nav class="header-menu">
-                <button id="btn-new" class="menu-btn">새 프로젝트</button>
-                <button id="btn-save" class="menu-btn" title="Ctrl+S">저장</button>
-                <button id="btn-load" class="menu-btn" title="Ctrl+O">불러오기</button>
-                <button id="btn-export-dxf" class="menu-btn">DXF 내보내기</button>
-            </nav>
-        </header>
-
-        <!-- 메인 컨텐츠 -->
-        <div class="content-area" id="content-area">
-            <!-- 트리 네비게이션 -->
-            <aside class="tree-panel" id="tree-panel">
-                <div class="tree-header">메뉴</div>
-                <ul id="tree-menu" class="tree-root">
-                    <!-- JavaScript에서 동적 생성 -->
-                </ul>
-            </aside>
-
-            <!-- 트리 / 본문 크기 조절 -->
-            <div class="splitter splitter-v" id="splitter-tree" role="separator" aria-orientation="vertical" title="드래그하여 너비 조절"></div>
-
-            <!-- 우측 패널 -->
-            <main class="main-panel" id="main-panel">
-                <!-- SVG 뷰어 -->
-                <div class="viewer-panel">
-                    <div class="viewer-toolbar">
-                        <button id="btn-zoom-in" class="viewer-btn" title="확대">+</button>
-                        <button id="btn-zoom-out" class="viewer-btn" title="축소">-</button>
-                        <button id="btn-fit" class="viewer-btn" title="전체보기">⊡</button>
-                        <span id="zoom-level" class="zoom-indicator">100%</span>
-                    </div>
-                    <div id="svg-container" class="svg-container">
-                        <svg id="culvert-svg" xmlns="http://www.w3.org/2000/svg">
-                            <!-- SVG 콘텐츠 동적 생성 -->
-                        </svg>
-                    </div>
-                </div>
-
-                <!-- 뷰어 / 폼 크기 조절 -->
-                <div class="splitter splitter-h" id="splitter-form" role="separator" aria-orientation="horizontal" title="드래그하여 높이 조절"></div>
-
-                <!-- 데이터 입력 폼 -->
-                <div class="form-panel">
-                    <div id="form-title" class="form-title">프로젝트 정보</div>
-                    <div id="form-content" class="form-content">
-                        <!-- JavaScript에서 동적 생성 -->
-                    </div>
-                </div>
-            </main>
+<div id="app" class="app">
+    <!-- 타이틀바 + 빠른 실행 -->
+    <div class="titlebar">
+        <button class="app-orb" id="app-orb" title="파일">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#3aa64a" stroke="#1f6f2a"/><rect x="6" y="8" width="12" height="8" fill="none" stroke="#fff" stroke-width="2"/></svg>
+        </button>
+        <div class="qat">
+            <button data-cmd="new" title="새 파일 (Ctrl+N)"><svg viewBox="0 0 16 16"><path d="M3 1h7l3 3v11H3z" fill="#fff" stroke="#557"/><path d="M10 1v3h3" fill="none" stroke="#557"/></svg></button>
+            <button data-cmd="open" title="열기 (Ctrl+O)"><svg viewBox="0 0 16 16"><path d="M1 4h5l1 1h7v9H1z" fill="#f4cf58" stroke="#a07a10"/></svg></button>
+            <button data-cmd="save" title="저장 (Ctrl+S)"><svg viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" fill="#4a72c4" stroke="#24438a"/><rect x="4" y="2" width="8" height="5" fill="#fff"/><rect x="4" y="10" width="8" height="5" fill="#ccd"/></svg></button>
+            <span class="qat-sep"></span>
+            <button data-cmd="undo" title="취소 (Ctrl+Z)"><svg viewBox="0 0 16 16"><path d="M5 3L1 7l4 4V8.5c4 0 6 1 8 4-0.5-4-3-7-8-7z" fill="#3b78c4"/></svg></button>
+            <button data-cmd="redo" title="복구 (Ctrl+Y)"><svg viewBox="0 0 16 16"><path d="M11 3l4 4-4 4V8.5c-4 0-6 1-8 4 .5-4 3-7 8-7z" fill="#3b78c4"/></svg></button>
+            <button data-cmd="undoAll" title="전부취소"><svg viewBox="0 0 16 16"><path d="M5 2L1 6l4 4V7.5c4 0 6 1 8 4-.5-4-3-7-8-7z" fill="#c44"/><path d="M2 14h12" stroke="#c44" stroke-width="2"/></svg></button>
         </div>
-
-        <!-- 상태 표시줄 -->
-        <footer class="status-bar">
-            <span id="status-message" class="status-message">기본 정보를 입력하세요</span>
-            <span class="status-right">
-                <span id="status-save" class="status-save">저장되지 않음</span>
-                <span id="status-version" class="status-version"></span>
-            </span>
-        </footer>
+        <div class="title-text" id="title-text">ESC Culvert - [제목없음.ecu]</div>
+        <div class="title-right">
+            <button class="help-btn" data-cmd="settings" title="설정">⚙ 설정</button>
+            <button class="help-btn" data-cmd="help" title="도움말">❓ 도움말</button>
+        </div>
     </div>
 
-    <!-- JavaScript (ES 모듈) -->
-    <script type="module" src="js/app.js"></script>
+    <!-- 메뉴 (드롭다운) -->
+    <div class="menubar" id="menubar"></div>
+
+    <!-- 작업영역 -->
+    <div class="workspace" id="workspace">
+        <aside class="pane tree-pane" id="tree-pane">
+            <div class="pane-title"><span>입력</span><button class="pane-x" data-cmd="toggleTree" title="숨기기">◂</button></div>
+            <div class="tree-scroll"><ul class="mtree" id="mtree"></ul></div>
+            <div class="tree-foot" id="tree-foot"></div>
+        </aside>
+        <div class="splitter-v" id="split-tree"></div>
+        <main class="center" id="center">
+            <div class="viewpane" id="viewpane">
+                <div class="view-tools">
+                    <button data-cmd="zoomFit" title="전체보기 (더블클릭)">⊡</button>
+                    <button data-cmd="zoomIn" title="확대 (휠 위로)">＋</button>
+                    <button data-cmd="zoomOut" title="축소 (휠 아래로)">－</button>
+                    <button data-cmd="viewDxf" title="현재 화면 DXF 저장">DXF</button>
+                    <button data-cmd="viewPng" title="이미지 파일저장">IMG</button>
+                </div>
+                <div class="cad-host" id="cad-host"></div>
+                <div class="view-legend" id="view-legend"></div>
+            </div>
+            <div class="splitter-h" id="split-dlg"></div>
+            <section class="dialog" id="dialog">
+                <div class="dlg-title">
+                    <span id="dlg-title">기본 설정 - 프로젝트 정보</span>
+                    <span class="dlg-title-btns">
+                        <button data-cmd="dlgMax" title="다이얼로그 고정 (최대화)">⇕</button>
+                        <button data-cmd="dlgReset" title="다이얼로그 위치 초기화">↺</button>
+                    </span>
+                </div>
+                <div class="dlg-head" id="dlg-head"></div>
+                <div class="dlg-tabs" id="dlg-tabs"></div>
+                <div class="dlg-body" id="dlg-body"></div>
+                <div class="dlg-foot">
+                    <div class="dlg-foot-left" id="dlg-foot-left"></div>
+                    <div class="dlg-foot-right">
+                        <button class="btn" id="btn-prev" title="이전 (Alt+P)">이전(<u>P</u>)</button>
+                        <button class="btn" id="btn-next" title="다음 (Alt+N)">다음(<u>N</u>)</button>
+                        <button class="btn" id="btn-apply" title="적용 (Alt+A)">적용(<u>A</u>)</button>
+                    </div>
+                </div>
+                <div class="dlg-msg" id="dlg-msg"><span class="ico-info">i</span><span id="dlg-msg-text"></span></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 상태바 -->
+    <div class="statusbar">
+        <span class="sb-coord" id="sb-coord">0.000, 0.000</span>
+        <span class="sb-msg" id="sb-msg">준비</span>
+        <span class="sb-cell" id="sb-save">저장되지 않음</span>
+        <span class="sb-cell" id="sb-project"></span>
+        <span class="sb-cell" id="sb-designer"></span>
+        <span class="sb-cell">SI 단위계</span>
+        <span class="sb-cell" id="sb-version"></span>
+    </div>
+</div>
+
+<!-- 파일 메뉴 (원형 버튼) -->
+<div class="appmenu hidden" id="appmenu">
+    <div class="appmenu-left">
+        <button data-cmd="new"><b>새로 만들기(N)</b><small>Ctrl+N</small></button>
+        <button data-cmd="open"><b>열기(O)...</b><small>Ctrl+O</small></button>
+        <button data-cmd="save"><b>저장(S)</b><small>Ctrl+S</small></button>
+        <button data-cmd="saveAs"><b>다른 이름으로 저장(A)...</b></button>
+        <hr>
+        <button data-cmd="print"><b>인쇄(P)</b></button>
+        <button data-cmd="importOld"><b>가져오기 (이전 ESC Culvert JSON)</b></button>
+        <hr>
+        <button data-cmd="closeMenu"><b>닫기</b></button>
+    </div>
+    <div class="appmenu-right">
+        <div class="appmenu-h">최근 문서</div>
+        <div id="recent-list"></div>
+    </div>
+</div>
+
+<div class="modal-layer hidden" id="modal-layer"></div>
+<input type="file" id="file-input" accept=".ecu,.acu,.json" hidden>
+
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
