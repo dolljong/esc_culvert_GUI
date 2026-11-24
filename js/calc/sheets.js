@@ -12,7 +12,7 @@
 //   구조도     BLOCKn 구조도 (1) 주철근 조립도 (Cycle 별) · 일반단면도 · BMD/SFD(해석 결과가 있을 때) · 노트
 //                          (2) 평면 배근도 (상부/하부(/중간) 슬래브) · 표준단면도
 //                          (3) 수평철근 · 전단철근 배근도
-//                          (4~) 철근상세 + 철근재료표 (테이블당 데이타수 마다 한 장) + 직경별 집계
+//                          (4~) 철근상세 + 철근재료표 (테이블당 데이타수 마다 한 장) (직경별 소계·총계 포함)
 //              BLOCKn 기둥부 구조도 (1~) 기둥 단면 · 거더 단면 · 철근상세 · 재료표 (기둥이 있을 때)
 //   기타구조도 시점부(좌)-일체식 / 시점부(우)-옹벽식(1)(2) … · 접속슬래브 배근도(n)
 //
@@ -28,7 +28,7 @@ import { getHorizontal } from './alignment.js';
 import { drawSection } from '../draw/sectionDraw.js';
 import { drawCulvertPlan, drawCenterLine, drawProfile } from '../draw/planDraw.js';
 import { drawBars, drawBarMarks, drawSpliceTicks, drawDots, drawForceDiagram, drawHaunchBars, BAR_COLOR, OTHER_COLOR } from '../draw/rebarDraw.js';
-import { drawBarShape } from '../draw/barShapes.js';
+import { groupShapes, drawBarShapeGroup } from '../draw/barShapes.js';
 import { drawWingsPlan, drawWallPlan, drawIntegralElevation, drawIntegralSection, drawWallSection, drawWallElevation } from '../draw/wingDraw.js';
 import { mainBarLayout, getSettings, cyclesOf, getRebarCommon, materials, normDia, DIAS, barD } from './rebar.js';
 import { horzLayout } from './rebarHorz.js';
@@ -177,7 +177,7 @@ export const SETTINGS_UI = {
                 ],
             },
             { group: '수평/전단 철근', items: [['check', 'show.horz', '수평철근 배근도'], ['check', 'show.shear', '전단철근 배근도']] },
-            { group: '철근재료표', items: [['check', 'show.shapes', '철근상세'], ['check', 'show.table', '철근재료표'], ['check', 'show.summary', '직경별 집계표']] },
+            { group: '철근재료표', items: [['check', 'show.shapes', '철근상세'], ['check', 'show.table', '철근재료표'], ['check', 'show.summary', '재료표 총계']] },
             { group: '출력옵션-페이지', items: [['radio', 'page', 'BLOCK별 출력', 'block'], ['radio', 'page', '동일 BLOCK 통합 출력', 'merge']] },
             { group: '출력옵션', items: [['check', 'unitM', '재료표 길이 m 단위 출력']] },
         ],
@@ -767,11 +767,20 @@ function columnRebarViews(p, c, bi, Ss) {
 function shapesBlock(rows, cols = 4) {
     if (!rows.length) return null;
     const d = new Drawing({ textHeight: 2.2 });
-    const cw = 92, ch = 52;
-    rows.forEach((r, i) => {
-        const x = (i % cols) * cw, y = -Math.floor(i / cols) * ch - ch + 12;
-        drawBarShape(d, r, { x, y, w: 58, th: 2.0 });
+    const cw = 92, gap = 8;
+    // 같은 모양은 그림 하나 + 아래 제원표. 그림마다 표 길이가 달라 행 단위로 높이를 맞춘다.
+    const cells = groupShapes(rows).map((grp) => {
+        const g = new Drawing({ textHeight: 2.2 });
+        drawBarShapeGroup(g, grp.rows, { x: 0, y: 0, w: 58, th: 2.0 });
+        return { g, bb: g.bbox() };
     });
+    let yTop = 0;
+    for (let i = 0; i < cells.length; i += cols) {
+        const row = cells.slice(i, i + cols);
+        const h = Math.max(...row.map(c => c.bb.maxY - c.bb.minY));
+        row.forEach((c, k) => d.merge(c.g, k * cw - c.bb.minX, yTop - c.bb.maxY));
+        yTop -= h + gap;
+    }
     return view(d, 1, '철 근 상 세', { fixed: true });
 }
 
@@ -786,16 +795,32 @@ function tableBlock(rows, G, opts = {}) {
         { t: '기 호', w: 14 }, { t: '직 경', w: 13 }, { t: unitM ? '길 이\n(m)' : '길 이\n(mm)', w: 18, align: 'right' }, { t: '수 량\n(EA)', w: 15, align: 'right' },
         { t: '총길이\n(m)', w: 20, align: 'right' }, { t: '단위중량\n(kg/m)', w: 18, align: 'right' }, { t: '총중량\n(kg)', w: 20, align: 'right' },
     ];
-    const body = rows.map(r => [r.mark, r.dia, fmtM(r.length, unitM), fmtNum(r.count), (r.length / 1000 * n0(r.count)).toFixed(3), (r.unitMass || 0).toFixed(3), (r.weight || 0).toFixed(1)]);
-    const t = drawTable(d, 0, 0, cols, body, { rowH: opts.rowH || 5.5, th: 2.2, shadow: G.tableShadow, title: opts.title });
+    // 직경 순으로 묶고(같은 직경 안은 원래 순서), 직경마다 소계 행. 직경별 집계표는 따로 만들지 않는다.
+    const di = (r) => { const k = DIAS.indexOf(normDia(r.dia)); return k < 0 ? 999 : k; };
+    const sorted = rows.map((r, i) => ({ r, i })).sort((a, b) => di(a.r) - di(b.r) || a.i - b.i).map(x => x.r);
+    const body = [];
+    const SUB = 3, TOT = 2;
+    let cur = null, sL = 0, sW = 0;
+    const flush = () => { if (cur != null) body.push({ cells: ['소 계', cur, '', '', sL.toFixed(3), '', sW.toFixed(1)], color: SUB }); };
+    for (const r of sorted) {
+        const k = normDia(r.dia) || r.dia;
+        if (k !== cur) { flush(); cur = k; sL = 0; sW = 0; }
+        const len = r.length / 1000 * n0(r.count);
+        sL += len; sW += r.weight || 0;
+        body.push([r.mark, r.dia, fmtM(r.length, unitM), fmtNum(r.count), len.toFixed(3), (r.unitMass || 0).toFixed(3), (r.weight || 0).toFixed(1)]);
+    }
+    flush();
+    // 총계: 마지막 장에만 (opts.summary = 이 구조도의 전체 행). 여러 장이면 직경별 전체 계를 먼저 쓴다.
     if (opts.summary) {
         const S = summarize(opts.summary);
-        const sc = [{ t: '직 경', w: 16 }, { t: '총길이(m)', w: 26, align: 'right' }, { t: '총중량(kg)', w: 26, align: 'right' }, { t: '할증포함(kg)', w: 28, align: 'right' }];
-        const sb = S.list.map(e => [e.dia, e.length.toFixed(3), e.net.toFixed(1), e.gross.toFixed(1)]);
-        sb.push({ cells: ['합 계', '', S.net.toFixed(1), S.gross.toFixed(1)], color: 2, bold: true });
-        sb.push({ cells: ['(ton)', '', (S.net / 1000).toFixed(3), (S.gross / 1000).toFixed(3)], color: 2 });
-        drawTable(d, 0, -t.h - 8, sc, sb, { rowH: 5.5, th: 2.2, shadow: G.tableShadow, title: '직경별 집계표' });
+        if (opts.summary.length !== rows.length) {
+            for (const e of S.list) body.push({ cells: ['전체 계', e.dia, '', '', e.length.toFixed(3), '', e.net.toFixed(1)], color: SUB });
+        }
+        const L = S.list.reduce((a, e) => a + e.length, 0);
+        body.push({ cells: ['총 계', '', '', '', L.toFixed(3), '', S.net.toFixed(1)], color: TOT, bold: true });
+        body.push({ cells: ['할증포함', '', '', '', '', '(ton)', `${S.gross.toFixed(1)} (${(S.gross / 1000).toFixed(3)})`], color: TOT });
     }
+    drawTable(d, 0, 0, cols, body, { rowH: opts.rowH || 5.5, th: 2.2, shadow: G.tableShadow, title: opts.title });
     return view(d, 1, null, { fixed: true });
 }
 
@@ -849,6 +874,171 @@ function detailPage(p, c, S, meta, chunk, allRows, show) {
             d.merge(sv.d, A.x - bb.minX * sc, top - bb.maxY * sc, sc);
             drawViewTitle(d, A.x + bb.w * sc / 2, top + 1.5, '철 근 상 세', '', { box: true, shadow: G.titleShadow, th: 4 });
         }
+    }
+    d.text(15 + 504 * (fr.W - 30) / 811, 10 + 28 / 6, 'NONE', { color: 6, layer: 'FRAME-TEXT', h: 2.4, valign: 'middle' });
+    finalize(d, G);
+    d.sheetScale = 1;
+    d.sheetSize = { w: fr.W, h: fr.H };
+    d.title = meta.title;
+    return d;
+}
+
+// ── 철근상세 + 재료표 장 배치 (본체·기둥부) ──────────────────────────
+// 출력 기준 문자 2.5~3mm(용지 mm) 가 되도록 크기를 고정하고 줄이지 않는다.
+//  · 재료표는 하나: 높이가 넘치면 직경 단위로 끊어 오른쪽부터 좌우로 나란히 놓는다 (이어지는 열은 제목 없이).
+//  · 철근상세는 남는 왼쪽 영역에 채우고, 넘치면 다음 장으로 이어진다.
+const DT = {
+    shapeTh: 3.6,       // 철근상세 기준 문자 (가장 작은 문자 = 0.7배 ≈ 2.5mm)
+    shapeW: 104,        // 철근상세 그림 폭
+    tableTh: 2.8,       // 재료표 문자
+    rowH: 7,            // 재료표 행 높이
+    colScale: 1.25,     // 재료표 열 폭 배율 (기본 열 폭 기준)
+    gap: 10,            // 표·그림 사이 간격
+};
+
+function detailCols(unitM) {
+    const k = DT.colScale;
+    return [
+        { t: '기 호', w: 14 * k }, { t: '직 경', w: 13 * k }, { t: unitM ? '길 이\n(m)' : '길 이\n(mm)', w: 18 * k, align: 'right' }, { t: '수 량\n(EA)', w: 15 * k, align: 'right' },
+        { t: '총길이\n(m)', w: 20 * k, align: 'right' }, { t: '단위중량\n(kg/m)', w: 18 * k, align: 'right' }, { t: '총중량\n(kg)', w: 20 * k, align: 'right' },
+    ];
+}
+
+/** 재료표 행을 직경 묶음으로: [{ dia, lines:[행...] }] (각 묶음 끝에 소계), 마지막에 총계 묶음 */
+function detailTableBlocks(rows, unitM, withTotal) {
+    const di = (r) => { const k = DIAS.indexOf(normDia(r.dia)); return k < 0 ? 999 : k; };
+    const sorted = rows.map((r, i) => ({ r, i })).sort((a, b) => di(a.r) - di(b.r) || a.i - b.i).map(x => x.r);
+    const blocks = [];
+    let cur = null;
+    for (const r of sorted) {
+        const k = normDia(r.dia) || r.dia;
+        if (!cur || cur.dia !== k) { cur = { dia: k, lines: [], L: 0, W: 0 }; blocks.push(cur); }
+        const len = r.length / 1000 * n0(r.count);
+        cur.L += len; cur.W += r.weight || 0;
+        cur.lines.push([r.mark, r.dia, fmtM(r.length, unitM), fmtNum(r.count), len.toFixed(3), (r.unitMass || 0).toFixed(3), (r.weight || 0).toFixed(1)]);
+    }
+    for (const b of blocks) b.lines.push({ cells: ['소 계', b.dia, '', '', b.L.toFixed(3), '', b.W.toFixed(1)], color: 3 });
+    if (withTotal && rows.length) {
+        const S = summarize(rows);
+        const L = S.list.reduce((a, e) => a + e.length, 0);
+        blocks.push({ dia: '계', lines: [
+            { cells: ['총 계', '', '', '', L.toFixed(3), '', S.net.toFixed(1)], color: 2, bold: true },
+            { cells: ['할증포함', '', '', '', '', '(ton)', `${S.gross.toFixed(1)} (${(S.gross / 1000).toFixed(3)})`], color: 2 },
+        ] });
+    }
+    return blocks;
+}
+
+/** 재료표 열 나누기: 높이 H 안에 들어가도록 직경 묶음 단위로 (한 묶음이 넘치면 그 묶음만 행 단위로 자름) */
+function splitTableColumns(blocks, H) {
+    const titleH = DT.tableTh * 2.6, headH = DT.rowH * 1.4;
+    const maxRows = Math.max(3, Math.floor((H - titleH - headH) / DT.rowH));
+    const cols = [];
+    let cur = [];
+    for (const b of blocks) {
+        let lines = b.lines;
+        if (cur.length && cur.length + lines.length > maxRows) { cols.push(cur); cur = []; }
+        while (lines.length > maxRows) { cols.push(lines.slice(0, maxRows)); lines = lines.slice(maxRows); }
+        cur = cur.concat(lines);
+    }
+    if (cur.length) cols.push(cur);
+    return cols;
+}
+
+function tableColumnDrawing(lines, G, unitM, first) {
+    const d = new Drawing({ textHeight: DT.tableTh });
+    const titleH = DT.tableTh * 2.6;
+    // 이어지는 열은 제목 자리를 비워 머리글 높이를 맞춘다
+    drawTable(d, 0, first ? 0 : -titleH, detailCols(unitM), lines, { rowH: DT.rowH, th: DT.tableTh, shadow: G.tableShadow, title: first ? '철 근 재 료 표' : null });
+    return d;
+}
+
+/** 빈 도곽의 배치 영역 (용지 mm) */
+function frameArea(G) {
+    const d = new Drawing({ textHeight: PAPER_TH });
+    return drawSheetFrame(d, { size: G.size, fields: G.fields, dgk: G.dgk }).area;
+}
+
+/**
+ * 철근상세 장 계획: [{ tables:[Drawing], cells:[{ g, bb, x, y }] }]
+ * x, y 는 영역 왼쪽 위 기준 오프셋 (용지 mm).
+ */
+function planDetailPages(rows, G, show) {
+    if (!rows.length) return [];
+    const A = frameArea(G);
+    const unitM = show.unitM !== false;
+    // 재료표 열
+    let tcols = [];
+    if (show.table !== false) {
+        const cols = splitTableColumns(detailTableBlocks(rows, unitM, show.summary !== false), A.h);
+        tcols = cols.map((lines, i) => tableColumnDrawing(lines, G, unitM, i === 0));
+    }
+    const tW = detailCols(unitM).reduce((s, c) => s + c.w, 0);
+    // 철근상세 그림 (같은 모양 하나씩)
+    const cells = show.shapes === false ? [] : groupShapes(rows).map((grp) => {
+        const g = new Drawing({ textHeight: DT.shapeTh });
+        drawBarShapeGroup(g, grp.rows, { x: 0, y: 0, w: DT.shapeW, th: DT.shapeTh });
+        return { g, bb: g.bbox() };
+    });
+    const pages = [];
+    let ti = 0, ci = 0;
+    // 표는 좌우로 나란히 (도곽 폭에 들어가는 만큼), 그림은 남는 자리나 다음 장으로
+    const maxTablesPerPage = Math.max(1, Math.floor((A.w + DT.gap) / (tW + DT.gap)));
+    while (ti < tcols.length || ci < cells.length) {
+        const page = { tables: [], cells: [] };
+        const nT = Math.min(tcols.length - ti, maxTablesPerPage);
+        page.tables = tcols.slice(ti, ti + nT);
+        ti += nT;
+        const leftW = A.w - (nT ? nT * (tW + DT.gap) : 0);
+        const H = A.h - TITLE_H;
+        // 그림 채우기 (행 단위, 행 높이 = 그 행에서 가장 큰 그림)
+        let y = 0;
+        while (ci < cells.length) {
+            let x = 0, rowH = 0;
+            const row = [];
+            while (ci + row.length < cells.length) {
+                const c = cells[ci + row.length];
+                const w = c.bb.maxX - c.bb.minX, h = c.bb.maxY - c.bb.minY;
+                if (x + w > leftW && (row.length || nT)) break;   // 표가 있는 장에서는 표 영역을 넘지 않는다
+                row.push({ ...c, x, h });
+                x += w + DT.gap;
+                rowH = Math.max(rowH, h);
+            }
+            if (!row.length || (page.cells.length && y + rowH > H)) break;
+            for (const c of row) page.cells.push({ g: c.g, bb: c.bb, x: c.x, y });
+            ci += row.length;
+            y += rowH + DT.gap;
+        }
+        if (!page.tables.length && !page.cells.length) break;   // 안전장치
+        pages.push(page);
+    }
+    return pages;
+}
+
+/** 계획된 한 장을 도곽에 그린다 */
+function detailPlannedPage(p, c, S, meta, page) {
+    const G = S.general;
+    const d = new Drawing({ textHeight: PAPER_TH });
+    const info = p.info || {};
+    const fr = drawSheetFrame(d, { size: G.size, title: meta.title, projectName: info.projectName, client: info.client, designer: info.designer, contractor: info.contractor, site: info.siteName, name1: c.name, number: meta.number, date: today(), fields: G.fields, dgk: G.dgk });
+    const A = fr.area;
+    // 재료표: 오른쪽 끝부터 왼쪽으로 첫 열 → 다음 열 (읽는 순서는 왼쪽→오른쪽이 되도록 마지막에 뒤집지 않고 왼쪽부터 놓는다)
+    const tbs = page.tables.map(t => ({ t, bb: t.bbox() }));
+    const totalW = tbs.reduce((s, x) => s + (x.bb.maxX - x.bb.minX), 0) + Math.max(0, tbs.length - 1) * DT.gap;
+    let tx = A.x + A.w - totalW;
+    const top = A.y + A.h;
+    for (const { t, bb } of tbs) {
+        d.merge(t, tx - bb.minX, top);   // 표의 y=0 이 머리(제목) 위
+        tx += (bb.maxX - bb.minX) + DT.gap;
+    }
+    if (page.cells.length) {
+        const yTop = A.y + A.h - TITLE_H;
+        let wMax = 0;
+        for (const cl of page.cells) {
+            d.merge(cl.g, A.x + cl.x - cl.bb.minX, yTop - cl.y - cl.bb.maxY);
+            wMax = Math.max(wMax, cl.x + (cl.bb.maxX - cl.bb.minX));
+        }
+        drawViewTitle(d, A.x + wMax / 2, yTop + 1.5, '철 근 상 세', '', { box: true, shadow: G.titleShadow, th: 4 });
     }
     d.text(15 + 504 * (fr.W - 30) / 811, 10 + 28 / 6, 'NONE', { color: 6, layer: 'FRAME-TEXT', h: 2.4, valign: 'middle' });
     finalize(d, G);
@@ -1320,7 +1510,7 @@ export function listSheets(p, opts = {}) {
             // (4~) 철근상세 + 재료표
             if (Ss.show.shapes || Ss.show.table) {
                 const rows = rowsOf(bi).filter(r => BODY_CATS.includes(r.cat));
-                for (const ch of detailChunks(rows, Ss.rowsPerTable)) str.push(mkItem('구조도', T(), (m) => detailPage(p, c, S, m, ch, rows, { ...Ss.show, unitM: Ss.unitM })));
+                for (const pg of planDetailPages(rows, G, { ...Ss.show, unitM: Ss.unitM })) str.push(mkItem('구조도', T(), (m) => detailPlannedPage(p, c, S, m, pg)));
             }
             // 기둥부 구조도
             const cws = safe('기둥', () => columnWalls(c, bi)) || [];
@@ -1328,7 +1518,7 @@ export function listSheets(p, opts = {}) {
                 const rows = rowsOf(bi).filter(r => r.cat === '보,기둥철근');
                 let kc = 1;
                 str.push(mkItem('구조도', `${lbl}기둥부 구조도 (${kc++})`, (m) => composeSheet(p, c, S, m, columnRebarViews(p, c, bi, Ss))));
-                for (const ch of detailChunks(rows, Ss.rowsPerTable)) str.push(mkItem('구조도', `${lbl}기둥부 구조도 (${kc++})`, (m) => detailPage(p, c, S, m, ch, rows, { ...Ss.show, unitM: Ss.unitM })));
+                for (const pg of planDetailPages(rows, G, { ...Ss.show, unitM: Ss.unitM })) str.push(mkItem('구조도', `${lbl}기둥부 구조도 (${kc++})`, (m) => detailPlannedPage(p, c, S, m, pg)));
             }
         }
 
