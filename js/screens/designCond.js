@@ -81,7 +81,7 @@ function envRows(ctx) {
     const rows = [
         { g: '기본환경', a: '적용설계기준 (하중조합)', cell: S('env.code', CODES), hint: '하중조합 권고안의 기준. 지진 권고안은 콘크리트설계기준 외에는 지하공동구설계기준으로 통일됩니다.' },
         { g: '기본환경', a: '콘크리트 설계기준', cell: S('env.kci', KCI), hint: '단면검토 및 균열검토에 적용되는 기준' },
-        { g: '기본환경', a: '해석Tool(2D)', cell: S('env.tool2d', TOOL2D), hint: 'SAP2000 7.4x 만 자동실행됩니다.' },
+        { g: '기본환경', a: '해석Tool(2D)', cell: S('env.tool2d', TOOL2D), hint: 'ESCSolver: 프로그램 내장 2D 골조 해석기 (기본).' },
         { g: '기본환경', a: '해석Tool(3D)', cell: S('env.tool3d', TOOL3D.map(v => ({ value: v, label: v === '해석안함' ? '3D해석 안함' : v }))), hint: '해석안함이면 3D Plate 해석이 비활성화됩니다.' },
         { g: '재료특성', a: '콘크리트', b: '강도(fck)', cell: N('env.fck'), unit: 'MPa', hint: 'fck 를 바꾸면 탄성계수(Ec)가 자동 계산됩니다.' },
         { g: '재료특성', a: '콘크리트', b: 'Ec 산정식', cell: S('env.ecFormula', EC_FORMULAS), hint: '탄성계수 자동계산식 (기본: 8500·∛(fck+8), wc=2300kg/m³)' },

@@ -84,8 +84,17 @@ export function memberForces(p, c, bi, opts = {}) {
         const L = groupLength(g, grp);
         const pts = [];
         const n = 24;
-        for (let i = 0; i <= n; i++) {
-            const x = L * i / n;
+        const xs = [];
+        for (let i = 0; i <= n; i++) xs.push(L * i / n);
+        // 전단력은 지점(벽체 접합 절점)에서 불연속 → 절점 좌·우 값을 모두 넣어 수직으로 뛰게 한다
+        if (which === 'V' && typeof res.stations === 'function') {
+            let st = [];
+            try { st = res.stations(grp === 'mid' ? 'middle' : grp) || []; } catch { st = []; }
+            const eps = 1e-6 * Math.max(L, 1);
+            for (const s of st) if (s > eps && s < L - eps) xs.push(s - eps, s + eps);
+        }
+        xs.sort((a, b) => a - b);
+        for (const x of xs) {
             let v = null;
             try { v = envAt(res, grp, x, which, opts.state); } catch { v = null; }
             if (v != null) pts.push([x, v]);

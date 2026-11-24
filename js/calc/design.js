@@ -17,7 +17,7 @@ export const KCI = ['KCI2003', 'KCI2007'];
 /** 거더검토시 단면력 산정방법 / 전단 검토위치 */
 export const GIRDER_METHODS = ['연속보 해석', '계수법 (wL²/n)'];
 export const GIRDER_SHEAR_OPTS = ['지점 연단', '지점 연단에서 d 위치'];
-export const TOOL2D = ['SAP2000', 'MIDAS', 'ASOLVER'];
+export const TOOL2D = ['ESCSolver', 'SAP2000', 'MIDAS'];
 export const TOOL3D = ['MIDAS', '해석안함'];
 export const EC_FORMULAS = ['8500·∛(fck+8)', 'KCI2007 0.077·mc^1.5·∛fcu', 'KCI2003 0.043·wc^1.5·√fck'];
 export const SEIS_METHODS = ['응답변위법', '등가정적하중법', '내진해석 하지않음'];
@@ -93,7 +93,7 @@ function seisDefault(u = false) {
 
 export const DEFAULT_DESIGN = {
     env: {
-        code: CODES[0], kci: 'KCI2007', tool2d: 'SAP2000', tool3d: '해석안함',
+        code: CODES[0], kci: 'KCI2007', tool2d: 'ESCSolver', tool3d: '해석안함',
         fck: 24, EcAuto: true, ecFormula: EC_FORMULAS[0], Ec: 26986,
         fy: 300, Es: 200000, EsSteel: 81000,
         nuC: 0.17, nuS: 0.40,
@@ -202,6 +202,7 @@ export function defaultDesign() {
 export function getDesign(p) {
     const d = merge(defaultDesign(), (p && p.design) || {});
     const e = d.env;
+    if (e.tool2d === 'ASOLVER') e.tool2d = 'ESCSolver';   // 이전 이름
     if (e.EcAuto !== false) e.Ec = calcEc(e.fck, e.ecFormula, e.gPlain);
     if (e.phiAuto !== false) Object.assign(e, defaultPhi(e.kci));
     for (const k of ['seisBox', 'seisU']) {
