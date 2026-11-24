@@ -260,7 +260,7 @@ export function integralElevation(c, key) {
 
 /**
  * 역T형 옹벽 단면 (x: 뒷굽 끝 0 → 앞굽 끝, y: 기초 하면 0)
- * 반환: { poly, stem:{xb0,xb1,xt0,xt1,y0,y1}, key:poly|null, lean:poly|null, W, WH, hStem }
+ * 반환: { poly, stem:{xb0,xb1,xt0,xt1,y0,y1}, key:poly|null, keyLine(도면용 ㄷ자), lean:poly|null, leanParts(도면용, 전단키에서 끊음), W, WH, hStem }
  */
 export function wallSection(r) {
     const B1 = n0(r.B1), B2 = n0(r.B2), B3 = n0(r.B3);
@@ -281,14 +281,28 @@ export function wallSection(r) {
         poly.push([backAt(BF1 + HU2), BF1 + HU2], [xb0 - HU1, BF1 + (BF2 - BF1) * (HU1 / (B2 || 1))]);
     } else poly.push([xb0, BF1]);
     poly.push([0, BF2]);
-    let key = null;
+    let key = null, keyLine = null;
     if (r.key && r.key.use) {
         const D = n0(r.key.D), Wk = n0(r.key.W), T = n0(r.key.T);
-        key = [[D, 0], [D + Wk, 0], [D + Wk, -T], [D, -T]];
+        key = [[D, 0], [D + Wk, 0], [D + Wk, -T], [D, -T]];      // 계산용 (점 순서를 바꾸지 말 것: 철근·면적이 의존)
+        // 도면용: 기초 하면에 붙은 ㄷ자 (뒤쪽 수직 → 하면 → 앞쪽 수직). 윗변은 기초 하면과 겹치므로 그리지 않는다.
+        keyLine = [[D, 0], [D, -T], [D + Wk, -T], [D + Wk, 0]];
     }
     const IO = n0(r.IO), IH = n0(r.IH);
     const lean = IH > 0 ? [[-IO, 0], [W + IO, 0], [W + IO, -IH], [-IO, -IH]] : null;
-    return { poly, W, WH, hStem, yJ, stem: { xb0, xb1, xt0, xt1, y0: yJ, y1: WH }, key, lean, B1, B2, B3, BF1, BF2, BB1, BB2, WT, batter: n };
+    // 도면용 버림: 전단키 자리에서 끊는다 (키가 버림보다 깊으면 두 조각, 얕으면 키 모양으로 파인 한 조각)
+    let leanParts = lean ? [lean] : null;
+    if (lean && key) {
+        const k0 = n0(r.key.D), k1 = k0 + n0(r.key.W), kT = n0(r.key.T);
+        if (kT >= IH) {
+            leanParts = [];
+            if (k0 > -IO) leanParts.push([[-IO, 0], [k0, 0], [k0, -IH], [-IO, -IH]]);
+            if (k1 < W + IO) leanParts.push([[k1, 0], [W + IO, 0], [W + IO, -IH], [k1, -IH]]);
+        } else {
+            leanParts = [[[-IO, 0], [k0, 0], [k0, -kT], [k1, -kT], [k1, 0], [W + IO, 0], [W + IO, -IH], [-IO, -IH]]];
+        }
+    }
+    return { poly, W, WH, hStem, yJ, stem: { xb0, xb1, xt0, xt1, y0: yJ, y1: WH }, key, keyLine, lean, leanParts, B1, B2, B3, BF1, BF2, BB1, BB2, WT, batter: n };
 }
 
 /** 각 날개벽의 평면 다각형 (도면 좌표) — 도면/수량 공용 */

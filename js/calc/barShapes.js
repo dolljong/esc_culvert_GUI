@@ -29,6 +29,7 @@ export const SHAPES = {
     11: { name: '폐합 띠철근', keys: ['A', 'B'], hooks: 2, desc: '2(A + B) + 갈고리×2' },
     12: { name: '원형 띠철근', keys: ['A'], desc: 'π·A' },
     13: { name: '다절곡', keys: ['A', 'B', 'C', 'D', 'E', 'R'], desc: 'A + B + C + D + E + 절곡부' },
+    14: { name: '헌치철근', keys: ['A', 'B', 'C', 'D', 'E'], desc: 'A + B + C (D·E = A-B, B-C 꺾임 내각 °)' },
 };
 export const SHAPE_NOS = Object.keys(SHAPES).map(Number);
 export const DIM_KEYS = ['A', 'B', 'C', 'D', 'E', 'R'];
@@ -58,7 +59,7 @@ export function shapeLength(row) {
     switch (s) {
         case 1: return d.A;
         case 2: return d.A + d.B;
-        case 3: case 5: case 9: return d.A + d.B + d.C;
+        case 3: case 5: case 9: case 14: return d.A + d.B + d.C;
         case 6: return d.A + d.B + d.C + d.D + d.E;
         case 7: case 10: return d.A + d.B + d.C + hk;
         case 8: return 2 * d.A + 2 * d.B + d.C;

@@ -8,6 +8,7 @@ import { Drawing, COLOR, fmtLen } from '../cad/drawing.js';
 import { drawSection, sectionTextHeight } from './sectionDraw.js';
 import { frameAxes } from '../calc/sectionGeom.js';
 import { mainBarLayout, pointAt, barInfo, coverOf, barD, faceRefSpan } from '../calc/rebar.js';
+import { haunchBarLayout } from '../calc/rebarHaunch.js';
 
 export const BAR_COLOR = 6;      // 자홍
 export const OTHER_COLOR = 1;    // 빨강
@@ -231,10 +232,38 @@ export function mainRebarDrawing(p, c, bi, opts = {}) {
     drawSpliceTicks(d, lay, lay.splices.filter(s => (opts.allLaps || cur(s)) && (opts.showAll || isCurMem(s))));
     for (const f of lay.faces.filter(x => cur(x) && isCurMem(x) && x.layer === (opts.layer || 1))) drawLapChain(d, lay, f, { names: true });
     drawBarMarks(d, lay, marked, { useInputName: opts.inputName !== false && !opts.showAll });
+    // 헌치철근 (1·3Cycle → 헌치 1Cycle, 2·4Cycle → 헌치 2Cycle)
+    drawHaunchBars(d, p, c, bi, cyc === 2 || cyc === 4 ? 2 : 1, { marks: false });
     if (opts.forces && opts.forces.length) drawForceDiagram(d, lay.g, opts.forces);
     if (opts.unfold && opts.member) drawUnfold(d, lay, opts);
     d.legend = `${cyc}Cycle`;
     return { d, layout: lay };
+}
+
+/**
+ * 헌치철근 (헌치철근 배근 화면과 같은 형상·기호, calc/rebarHaunch.haunchBarLayout).
+ * 길이 문자는 'L=' 로 시작해 도면의 '철근 길이표현' 옵션으로 숨길 수 있다.
+ * opts: { marks (기본 true), color, colorOf(bar) }
+ */
+export function drawHaunchBars(d, p, c, bi, cycle = 1, opts = {}) {
+    const hl = haunchBarLayout(p, c, bi, cycle);
+    for (const b of hl.bars) d.pline(b.pts, { color: opts.colorOf ? opts.colorOf(b) : (opts.color ?? BAR_COLOR), layer: 'REBAR' });
+    if (opts.marks === false) return hl;
+    const th = d.textHeight, r = th * 0.7, h = th * 0.65;
+    const seen = new Set();
+    for (const b of hl.bars) {
+        const k = `${b.row}|${b.col}|${b.mark}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const a = b.anchor;
+        const dir = [b.corner[1] === 'L' ? 0.6 : b.corner[1] === 'R' ? -0.6 : 0, b.row === 'top' ? -0.8 : 0.8];
+        const q = [a[0] + dir[0] * th * 2.2, a[1] + dir[1] * th * 2.2];
+        d.line(a[0], a[1], q[0] - dir[0] * r, q[1] - dir[1] * r, { color: COLOR.RED, layer: 'MARK' });
+        d.bubble(q[0], q[1], b.mark, { r, color: COLOR.RED, textColor: COLOR.GREEN });
+        d.text(q[0] + r * 1.3, q[1] + h * 0.1, b.dia, { color: COLOR.GREEN, h, align: 'left', valign: 'bottom', layer: 'MARK' });
+        d.text(q[0] + r * 1.3, q[1] - h * 0.2, `L=${fmtLen(b.length)}`, { color: COLOR.GREEN, h, align: 'left', valign: 'top', layer: 'MARK' });
+    }
+    return hl;
 }
 
 /**

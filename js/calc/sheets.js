@@ -27,7 +27,7 @@ import { sectionGeom } from './sectionGeom.js';
 import { getHorizontal } from './alignment.js';
 import { drawSection } from '../draw/sectionDraw.js';
 import { drawCulvertPlan, drawCenterLine, drawProfile } from '../draw/planDraw.js';
-import { drawBars, drawBarMarks, drawSpliceTicks, drawDots, drawForceDiagram, BAR_COLOR, OTHER_COLOR } from '../draw/rebarDraw.js';
+import { drawBars, drawBarMarks, drawSpliceTicks, drawDots, drawForceDiagram, drawHaunchBars, BAR_COLOR, OTHER_COLOR } from '../draw/rebarDraw.js';
 import { drawBarShape } from '../draw/barShapes.js';
 import { drawWingsPlan, drawWallPlan, drawIntegralElevation, drawIntegralSection, drawWallSection, drawWallElevation } from '../draw/wingDraw.js';
 import { mainBarLayout, getSettings, cyclesOf, getRebarCommon, materials, normDia, DIAS, barD } from './rebar.js';
@@ -647,6 +647,7 @@ function mainAssemblyView(p, c, bi, cyc, Ss) {
     drawBars(d, lay, lay.bars, { color: BAR_COLOR });
     drawSpliceTicks(d, lay, lay.splices);
     drawBarMarks(d, lay, lay.bars.filter(b => b.layer === 1 || b.piece === 0));
+    if (cyc === 1) drawHaunchBars(d, p, c, bi, 1);
     if (!Ss.show.barLen) d.entities = d.entities.filter(e => !(e.type === 'text' && /^L=/.test(e.str)));
     return view(d, s, `주철근 조립도 (${cyc}CYCLE)`);
 }
@@ -1042,8 +1043,8 @@ function wallSectionRebarView(c, key, end, s) {
     const th = d.textHeight;
     const cy = { color: COLOR.CYAN, layer: 'CONC' };
     d.pline(sct.poly, { ...cy, closed: true });
-    if (sct.key) d.pline(sct.key, cy);
-    if (sct.lean) d.pline(sct.lean, { ...cy, closed: true });
+    if (sct.keyLine) d.pline(sct.keyLine, cy);
+    if (sct.leanParts) for (const lp of sct.leanParts) d.pline(lp, { ...cy, closed: true });
     const cv = 80, st = sct.stem;
     const backAt = (y) => st.xb0 + (st.xt0 - st.xb0) * (y - sct.BF1) / ((sct.WH - sct.BF1) || 1);
     const frontAt = (y) => st.xb1 + (st.xt1 - st.xb1) * (y - sct.yJ) / ((sct.WH - sct.yJ) || 1);

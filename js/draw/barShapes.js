@@ -22,6 +22,7 @@ function schematic(shape) {
         case 11: return { pts: [[0.1, 0.42], [0.02, 0.5], [0, 0.5], [0, 0], [1, 0], [1, 0.5], [0, 0.5], [0.1, 0.42]], labels: [['A', 0.5, 0, 'b'], ['B', 1, 0.25, 'r']] };
         case 12: return { circle: true, labels: [['A', 0.5, 0.25, 'c']] };
         case 13: return { pts: [[0, 0.5], [0.3, 0.5], [0.45, 0.1], [0.75, 0.1], [1, 0.4]], labels: [['A', 0.15, 0.5, 't'], ['B', 0.37, 0.3, 'l'], ['C', 0.6, 0.1, 'b'], ['D', 0.88, 0.25, 'r']] };
+        case 14: return { pts: [[0.05, 0.12], [0.15, 0.35], [0.85, 0.35], [0.95, 0.12]], labels: [['A', 0.1, 0.23, 'l'], ['B', 0.5, 0.35, 't'], ['C', 0.9, 0.23, 'r'], ['D', 0.2, 0.3, 'b'], ['E', 0.8, 0.3, 'b']] };
         default: return { pts: [[0, 0], [1, 0]], labels: [['A', 0.5, 0, 'b']] };
     }
 }
@@ -94,8 +95,18 @@ function drawActualShape(d, row, ox, oy, W, th) {
     const q = rot.map(P);
     d.pline(q, BAR);
     const cx = q.reduce((s, p) => s + p[0], 0) / q.length, cy = q.reduce((s, p) => s + p[1], 0) / q.length;
-    const keys = ['A', 'B', 'C', 'D', 'E'];
+    const hn = +row.shape === 14;
+    const keys = hn ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
     const dims = row.dims || {};
+    // 헌치철근: 꺾임 내각 D·E 를 꺾임점 안쪽에 표기
+    if (hn) [['D', 1], ['E', 2]].forEach(([kk, i]) => {
+        if (!q[i - 1] || !q[i + 1] || dims[kk] == null || dims[kk] === '') return;
+        const u1 = [q[i - 1][0] - q[i][0], q[i - 1][1] - q[i][1]], u2 = [q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]];
+        const l1 = Math.hypot(u1[0], u1[1]) || 1, l2 = Math.hypot(u2[0], u2[1]) || 1;
+        const bis = [u1[0] / l1 + u2[0] / l2, u1[1] / l1 + u2[1] / l2];
+        const bl = Math.hypot(bis[0], bis[1]) || 1;
+        d.text(q[i][0] + bis[0] / bl * th * 1.6, q[i][1] + bis[1] / bl * th * 1.6, `${kk}=${dims[kk]}°`, { color: COLOR.GREEN, h: th * 0.8, valign: 'middle', layer: 'DIM' });
+    });
     for (let i = 1; i < q.length && i <= keys.length; i++) {
         const m = [(q[i][0] + q[i - 1][0]) / 2, (q[i][1] + q[i - 1][1]) / 2];
         const t = [q[i][0] - q[i - 1][0], q[i][1] - q[i - 1][1]];

@@ -13,7 +13,7 @@ import { drawSection, sectionTextHeight } from '../draw/sectionDraw.js';
 import { drawBars, OTHER_COLOR, BAR_COLOR } from '../draw/rebarDraw.js';
 import { DIAS, mainBarLayout } from '../calc/rebar.js';
 import {
-    HAUNCH_SHAPES, haunchColumns, haunchRows, defaultHaunchRebar, defaultBracketRebar, getHaunchRebar,
+    haunchColumns, haunchRows, defaultHaunchRebar, defaultBracketRebar, getHaunchRebar,
     haunchBarLayout, cornerBarLayout,
 } from '../calc/rebarHaunch.js';
 import { ensure, ensureSettings, liveModal, sameKindBlocks } from './rebarSet.js';
@@ -114,7 +114,7 @@ export default {
                 const k = `${b.row}|${b.col}|${b.mark}`;
                 if (seen.has(k)) continue;
                 seen.add(k);
-                const a = [(b.pts[0][0] + b.pts[1][0]) / 2, (b.pts[0][1] + b.pts[1][1]) / 2];
+                const a = b.anchor;
                 mark(b, a, [b.corner[1] === 'L' ? 0.6 : -0.6, b.row === 'top' ? -0.8 : 0.8]);
             }
             if (!hl.bars.length) d.legend = '헌치가 없거나 헌치철근 직경이 비어 있습니다.';
@@ -146,12 +146,14 @@ function renderHaunch(el, ctx, g) {
             for (const cy of ['c1', 'c2']) {
                 cells.push(custom('select', () => cur[cy] ?? '', (v) => store.set(`${base}.${cy}`, v), { options: DIA_OPT, hint: `${r.title} ${col.title} 헌치철근 ${cy === 'c1' ? 1 : 2}Cycle 직경 (빈칸 = 배치안함)` }));
             }
-            if (col.mid) cells.push(custom('select', () => cur.shape || 'V 형', (v) => store.set(`${base}.shape`, v), { options: HAUNCH_SHAPES, hint: '중간벽체 헌치철근 형태 (X 형: 벽을 가로질러 교차, V 형: 벽 중심에서 만남)' }));
+            const wl = col.mid && g.walls.find(w => w.kind === 'mid' && w.index === col.index && w.floor !== 2);
+            if (wl && (wl.type === '사각기둥' || wl.type === '원형기둥')) cells.push(lbl('기둥 연결', { cls: 'ro', align: 'center' }));
+            else if (col.mid) cells.push(lbl('반대면 연장', { cls: 'ro', align: 'center' }));
         }
         return { head: [{ t: r.title }], cells };
     });
     new Grid(el, { id: `haunch-${cols.length}`, head: [head0, head1], rows });
-    el.appendChild(h('div', { class: 'note' }, '* 헌치가 설치된 모서리에만 배치됩니다. 직경 빈칸은 해당 Cycle 에 철근을 두지 않습니다.'));
+    el.appendChild(h('div', { class: 'note' }, '* 헌치가 설치된 모서리에만 배치됩니다. 직경 빈칸은 해당 Cycle 에 철근을 두지 않습니다. 중간벽체가 기둥이면 좌우 헌치철근을 기둥 중심에서 이어 한 개로 배치합니다. 중간벽체 쪽은 벽을 가로질러 반대면 수직철근까지 연장합니다.'));
 }
 
 // ── 단절점부철근 ─────────────────────────────────────────────────────

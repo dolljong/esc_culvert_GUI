@@ -114,6 +114,13 @@ function rowBuilder(p, c, bi) {
 
 const SLAB = (m) => m === 'top' || m === 'bottom' || m === 'mid';
 
+/** 헌치철근 상세 14: 구간 길이 A(꺾임)·B(경사)·C(꺾임), D·E = 꺾임 내각 (°). pts 는 실제 각도 스케치용 */
+function haunchShape(pts, angles) {
+    const seg = (i) => Math.round(Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]));
+    const dims = { A: seg(0), B: seg(1), C: seg(2), D: angles[0], E: angles[1] };
+    return { shape: 14, dims, pts: pts.map(([x, y]) => [Math.round(x), Math.round(y)]) };
+}
+
 function bodyRows(p, c, bi, B) {
     const g = sectionGeom(c, bi);
     const st = B.st;
@@ -172,7 +179,8 @@ function bodyRows(p, c, bi, B) {
         if (!nPos) continue;
         try {
             for (const b of haunchBarLayout(p, c, bi, cy).bars) {
-                const sh = shapeFromPts(b.pts, 0);
+                // 양끝 꺾임 헌치철근: 상세 14 (A·B·C 길이 + D·E 꺾임 내각), 기둥 연결 철근 등은 일반 형상
+                const sh = b.angles ? haunchShape(b.pts, b.angles) : shapeFromPts(b.pts, 0);
                 B.add({ cat: '암거상세부', desc: `헌치철근 ${b.row === 'top' ? '상부' : '하부'} ${cy}C`, mark: b.mark, dia: b.dia, ...sh, count: nPos, main: false });
             }
         } catch (e) { void e; }

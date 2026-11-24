@@ -115,8 +115,8 @@ export function drawWallSection(d, row, ox = 0, oy = 0, sfx = '', opts = {}) {
     const th = d.textHeight;
     const T = (pts) => pts.map(([x, y]) => [x + ox, y + oy]);
     d.pline(T(s.poly), { ...CY, closed: true });
-    if (s.key) d.pline(T(s.key), { ...CY, closed: false });
-    if (s.lean) d.pline(T(s.lean), { ...CY, closed: true });
+    if (s.keyLine) d.pline(T(s.keyLine), { ...CY, closed: false });
+    if (s.leanParts) for (const lp of s.leanParts) d.pline(T(lp), { ...CY, closed: true });
     // 전면경사 표기
     if (s.batter > 0) {
         const xm = (s.stem.xt1 + s.stem.xb1) / 2 + ox + th * 0.6, ym = (s.stem.y0 + s.stem.y1) / 2 + oy;

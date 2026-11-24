@@ -9,7 +9,7 @@ import { num, sel, chk, lbl, txt } from '../ui/cells.js';
 import { h, button, modal, bSelect, bNumber, bRadio } from '../ui/dom.js';
 import { Drawing, COLOR, fmtLen } from '../cad/drawing.js';
 import { drawSection, sectionTextHeight } from '../draw/sectionDraw.js';
-import { drawBars, OTHER_COLOR } from '../draw/rebarDraw.js';
+import { drawBars, drawHaunchBars, OTHER_COLOR } from '../draw/rebarDraw.js';
 import { drawBarShape } from '../draw/barShapes.js';
 import { DIAS, mainBarLayout, normDia } from '../calc/rebar.js';
 import { SHAPES, SHAPE_NOS } from '../calc/barShapes.js';
@@ -151,6 +151,10 @@ export default {
         const r = ui.sel != null ? rows[ui.sel] : null;
         const base = r ? String(r.mark).replace(/-\d+$/, '') : null;
         drawBars(d, lay, lay.bars, { colorOf: (b) => (base && b.mark === base ? COLOR.YELLOW : OTHER_COLOR), lapOffset: 0 });
+        // 헌치철근: 선택 행이 헌치철근이면 그 Cycle 을 그리고 같은 기호를 강조
+        const isH = !!r && /^헌치철근/.test(r.desc || '');
+        const hcy = isH && /2C$/.test(r.desc) ? 2 : 1;
+        drawHaunchBars(d, ctx.p, ctx.c, bi, hcy, { marks: false, colorOf: (b) => (isH && b.mark === base ? COLOR.YELLOW : OTHER_COLOR) });
         if (r) {
             const g = lay.g;
             const cr = computeRow(ctx.p, r, getSettings(ctx.c, bi).roundLen);
