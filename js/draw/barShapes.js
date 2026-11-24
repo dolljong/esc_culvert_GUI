@@ -77,12 +77,30 @@ export function drawBarShape(d, row, opts = {}) {
     d.text(ox, oy - th * 2.6, `L = ${fmtLen(Math.round(L))}${row.lapN ? `  (이음 ${row.lap} × ${row.lapN})` : ''}${row.count != null ? `   ${row.count} EA` : ''}   [${info.desc}]`, { color: COLOR.GREEN, h: th * 0.75, align: 'left', valign: 'top', layer: 'TEXT' });
 }
 
+/** 상세 스케치에서 짧은 구간(끝 꺾임 100mm 등)이 보이도록 가장 긴 구간의 이 비율까지 늘려 그린다 (각도는 유지, 치수 문자는 실제 값) */
+const MIN_SEG_RATIO = 0.22;
+
+/** 각 구간 방향은 그대로 두고 길이만 최소값 이상으로 늘린 점열 */
+function visualPts(pts) {
+    const seg = [];
+    for (let i = 1; i < pts.length; i++) seg.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+    const lens = seg.map(([x, y]) => Math.hypot(x, y));
+    const minL = Math.max(...lens) * MIN_SEG_RATIO;
+    const out = [pts[0].slice()];
+    seg.forEach(([x, y], i) => {
+        const L = lens[i], s = L > 1e-9 && L < minL ? minL / L : 1;
+        const q = out[out.length - 1];
+        out.push([q[0] + x * s, q[1] + y * s]);
+    });
+    return out;
+}
+
 /**
  * 실제 절곡 각도로 그린다 (row.pts: 철근 점열, mm). 가장 긴 구간을 수평으로 돌려 폭 W, 높이 W/2 안에 맞춘다.
  * 구간 기호는 A, B, C … 순서 (row.dims 와 같은 순서).
  */
 function drawActualShape(d, row, ox, oy, W, th) {
-    const pts = row.pts;
+    const pts = visualPts(row.pts);
     let k = 0, best = -1;
     for (let i = 1; i < pts.length; i++) { const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (L > best) { best = L; k = i; } }
     const a = Math.atan2(pts[k][1] - pts[k - 1][1], pts[k][0] - pts[k - 1][0]);
